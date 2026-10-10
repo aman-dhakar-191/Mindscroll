@@ -83,17 +83,24 @@ new versions from here.
 
 ### One-time setup
 
-Add these repository secrets under **Settings → Secrets and variables → Actions**. You can
-reuse the store's signing key.
+Create the signing key with
+[android-keystore-generator](https://github.com/aman-dhakar-191/android-keystore-generator)
+(private). Go to *Actions → Generate signing key → Run workflow* and set `target_repo` to
+`aman-dhakar-191/Mindscroll`. This writes the four secrets the Release workflow reads straight
+into this repo:
 
 | Secret | Value |
 | --- | --- |
-| `KEYSTORE_BASE64` | `base64 -w0 release.jks` |
+| `KEYSTORE_BASE64` | the keystore, base64 |
 | `KEYSTORE_PASSWORD` | the keystore password |
 | `KEY_ALIAS` | the key alias |
 | `KEY_PASSWORD` | the key password |
 
-Every release must be signed with the same key, or Android refuses to install it as an update.
+`target_repo` needs that repo's `TARGET_REPO_TOKEN` to have *Secrets: read and write* on
+Mindscroll. Without it, add the values from `secrets.txt` here by hand. Download the encrypted
+archive from the run within a day and back it up. Mindscroll gets its own key, separate from the
+store's: every update must be signed with the same key, so losing it means everyone has to
+uninstall and reinstall.
 
 ### Each release
 
