@@ -1,15 +1,27 @@
 # Mindscroll
 
 A personal digital wellbeing tracker for Android. Version 1 counts the reels and shorts you
-swipe through in **Instagram**, **YouTube Shorts** and **Facebook**, and keeps today's number
-in front of you:
+watch in **Instagram**, **YouTube Shorts** and **Facebook**, and keeps today's number in front
+of you, with **Mo** keeping you company:
 
-- **Status bar / notification:** the count itself is the status bar icon, and the notification
-  breaks it down per app.
-- **Camera patch:** a black pill around the front camera with the count beside it. It's drawn by
-  the accessibility service, which can draw above the status bar. A notification can't do that.
-- **Floating bubble:** a small counter you can drag anywhere (off by default).
-- **Home screen widget.**
+- **Status bar / notification:** the count itself is the status bar icon. The notification
+  shows Mo, what Mo thinks of today so far, and a per-app breakdown.
+- **Camera patch:** a black island around the front camera, with Mo on one side and the count on
+  the other. Tap it to open a panel with Mo's take, per-app counts and the last 7 days. It's
+  drawn by the accessibility service, which can draw above the status bar. A notification can't
+  do that.
+- **Floating bubble:** Mo with a count badge, which you can drag anywhere. Tap it for the same
+  panel. Off by default.
+- **Home screen widget** with Mo, the count and Mo's line.
+
+## Meet Mo
+
+Mo is a small blob who counts with you: cheeky, on your side, never preachy. Mo's mood (and
+color) follows today's count: **chill** (0–15), **curious** (16–40), **wobbly** (41–80),
+**dizzy** (81–150) and **running on fumes** (151+). Mo's lines change every few reels, with
+special ones at milestones and late at night. Moods and lines live in
+[`Mo.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Mo.kt), and the drawing is in
+[`MoPainter.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoPainter.kt).
 
 Everything stays on the phone. The app has no internet permission.
 
@@ -30,13 +42,20 @@ service draws them.
 
 ## How reels are counted
 
-The accessibility service only receives *scroll* events, and only from the three apps above.
-A scroll counts as a new reel when:
+The accessibility service only listens to Instagram, YouTube and Facebook. Within those, it
+looks for a *reel feed*: either a known feed view id, or a list that fills most of the screen
+while one item fills the list. That rule filters out normal feeds, and sideways pagers like
+stories are skipped.
 
-- the scrolled list is a reel feed: either a known feed view id, or a list that fills most of
-  the screen while one item fills the list (this filters out normal feeds), and
-- the list has settled on a single item further down than any reel already counted in this
-  session, so swiping back and forth doesn't count again.
+- **Opening a feed counts its first reel.** This covers the Reels tab, tapping a reel in the
+  feed, and coming back to the app. Window changes trigger a check of the screen, at most
+  every 0.8 s, because video apps change their content constantly.
+- **Swiping counts each new reel** once the list settles on an item further down than any
+  already counted in this visit, so swiping back and forth doesn't count again. A refresh
+  back to the top counts its new first reel.
+- **A sheet or dialog over a reel** (comments, share) doesn't count again when it closes. Nor
+  does coming back to the exact reel you left.
+- **A visit ends** when you leave the feed, or after 45 s with no activity at all from the app.
 
 If an app doesn't report item positions, each separate swipe gesture counts once instead. These
 rules live in [`ReelDetector`](app/src/main/java/io/github/amandhakar/mindscroll/tracker/reels/ReelDetector.kt).

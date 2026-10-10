@@ -1,9 +1,10 @@
 package io.github.amandhakar.mindscroll.tracker
 
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * A tracker measures one kind of behaviour and records it through a [Recorder]. Everything
+ * A tracker measures one kind of behaviour and records it through a [TrackerHost]. Everything
  * it records lands in the shared `metric_event` table under its [id], so the home screen,
  * notification, widget and future features (limits, weekly stats) read it the same way.
  *
@@ -25,7 +26,7 @@ interface Tracker {
     val eventTypes: Int get() = 0
 
     /** Called on the main thread for each matching event. Must be fast. */
-    fun onAccessibilityEvent(event: AccessibilityEvent, recorder: Recorder) {}
+    fun onAccessibilityEvent(event: AccessibilityEvent, host: TrackerHost) {}
 
     /** Friendly name for one of this tracker's item keys (e.g. a package name). */
     fun itemLabel(itemKey: String): String = itemKey
@@ -35,7 +36,11 @@ interface Tracker {
     }
 }
 
-/** Writes a measurement for the calling tracker. Safe to call from the main thread. */
-fun interface Recorder {
+/** What the accessibility service gives a tracker. */
+interface TrackerHost {
+    /** Writes a measurement for the calling tracker. Safe to call from the main thread. */
     fun record(itemKey: String, value: Long)
+
+    /** The window the user is interacting with, for trackers that inspect the screen. */
+    fun activeWindowRoot(): AccessibilityNodeInfo?
 }

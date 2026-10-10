@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -31,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 
 @Composable
@@ -64,18 +67,24 @@ fun OnboardingScreen(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Mindscroll", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MoFace(Mood.CHILL, Modifier.size(72.dp))
+                Column {
+                    Text("Mindscroll", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    Text("Hi, I'm ${Mo.NAME}.", style = MaterialTheme.typography.titleMedium)
+                }
+            }
             Text(
-                "Counts the reels and shorts you swipe through each day, so you can see the number " +
-                    "instead of guessing it.",
+                "I count the reels and shorts you swipe through each day, so you see the number " +
+                    "instead of guessing it. No judging. Mostly.",
                 style = MaterialTheme.typography.bodyLarge,
             )
 
             StepCard(
                 title = "1. Count reels (required)",
-                body = "Turn on Mindscroll under Accessibility → Installed apps. It only listens to " +
-                    "scrolling in ${ReelApps.all.joinToString { it.label }}. It doesn't read text " +
-                    "or messages, and it has no internet permission, so nothing leaves your phone.\n\n" +
+                body = "Turn on Mindscroll under Accessibility → Installed apps. It only looks at " +
+                    "${ReelApps.all.joinToString { it.label }}, and only at the shape of their screens " +
+                    "(is a reel feed showing, did it scroll). It doesn't read text or messages, and it has no internet permission, so nothing leaves your phone.\n\n" +
                     "If Android says \"Restricted setting\", open App info, tap ⋮ → Allow restricted " +
                     "settings, then try again.",
                 done = permissions.accessibility,

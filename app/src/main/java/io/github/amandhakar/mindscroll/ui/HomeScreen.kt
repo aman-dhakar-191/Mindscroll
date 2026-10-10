@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,8 +40,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.DayTotal
+import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -71,6 +76,8 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit) {
                 }
             }
 
+            MoHeader(total)
+
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(total.toString(), fontSize = 88.sp, fontWeight = FontWeight.Bold)
                 Text("${tracker.title.lowercase()} today", style = MaterialTheme.typography.titleMedium)
@@ -94,6 +101,29 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit) {
 
             TextButton(onClick = onOpenSetup, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Text("Permissions and setup")
+            }
+        }
+    }
+}
+
+@Composable
+private fun MoHeader(total: Long) {
+    val mood = Mood.forCount(total)
+    val accent = Color(mood.color)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        MoFace(mood, Modifier.size(88.dp))
+        Card(
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp),
+            colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.18f)),
+            modifier = Modifier.weight(1f),
+        ) {
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    "${Mo.NAME} · ${mood.title}".uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(Mo.line(total, LocalTime.now().hour), style = MaterialTheme.typography.bodyLarge)
             }
         }
     }
@@ -152,11 +182,11 @@ private fun DisplayCard() {
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("On screen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ToggleRow("Camera patch", "A pill around the front camera with today's count", cameraPatch) {
+            ToggleRow("Camera patch", "Mo and today's count around the front camera. Tap it for details.", cameraPatch) {
                 cameraPatch = it
                 settings.cameraPatch = it
             }
-            ToggleRow("Floating bubble", "A small counter you can drag anywhere", bubble) {
+            ToggleRow("Floating bubble", "Mo with a count badge. Drag it anywhere, tap for details.", bubble) {
                 bubble = it
                 settings.bubble = it
             }

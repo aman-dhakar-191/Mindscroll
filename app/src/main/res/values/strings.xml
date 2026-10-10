@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">Mindscroll</string>
     <string name="accessibility_label">Mindscroll reel counter</string>
-    <string name="accessibility_description">Counts how many reels and shorts you swipe through in Instagram, YouTube and Facebook. It only looks at scrolling in those apps, doesn\'t read text or messages, and has no internet access. It also draws the optional camera patch and floating counter.</string>
+    <string name="accessibility_description">Counts how many reels and shorts you watch in Instagram, YouTube and Facebook. It only looks at those apps, and only at the shape of their screens (is a full-screen reel feed showing, did it scroll). It doesn\'t read text or messages and has no internet access. It also draws Mo, the optional camera patch and the floating bubble.</string>
     <string name="widget_label">Reels today</string>
+    <string name="mascot_name">Mo</string>
     <string name="widget_description">Today\'s reel count</string>
 </resources>

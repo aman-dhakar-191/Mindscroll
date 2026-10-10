@@ -18,55 +18,128 @@ data class ScrollSample(
     /** Height of its tallest visible child, px, or 0 if unknown. */
     val tallestChildHeight: Int,
     val screenHeight: Int,
+    /** The list scrolls sideways (e.g. Instagram stories), which isn't a reel feed. */
+    val horizontal: Boolean = false,
 )
 
 /**
- * Decides whether a scroll moved to a new reel.
+ * Decides when the user is looking at a reel they hadn't seen yet.
  *
- * A reel feed is a list that fills most of the screen and shows one item at a time. When the
- * app reports item positions, a reel counts once the list settles on a single item further
- * down than any seen in this session, so swiping back and forth over the same reels doesn't
- * count again. When it doesn't report positions, each separate swipe gesture counts once.
+ * A reel feed is a list that fills most of the screen and shows one item at a time. A *visit*
+ * starts when a feed appears (opening the Reels tab, tapping a reel in the feed, coming back
+ * to the app) and its first reel counts. After that:
+ *
+ * - when the app reports item positions, a reel counts once the list settles on an item
+ *   further down than any counted in this visit, so swiping back and forth doesn't recount;
+ * - when it doesn't, each separate swipe gesture counts once.
+ *
+ * Three signals feed it: [onScroll], [onScreen] (whether a feed is showing right now, which
+ * catches opening a feed before anything scrolls) and [onAppActivity] (any event from the app,
+ * so a long silence reads as having left it).
  */
 class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) {
 
-    private class Session(
-        var viewId: String?,
+    private class Visit(
+        /** Furthest item position counted, -1 if not known yet. */
         var furthestIndex: Int,
-        var lastScrollAt: Long,
+        /** When the feed was opened (its first reel counted). */
+        val openedAt: Long,
+        var lastActivityAt: Long,
+        var lastScrollAt: Long = Long.MIN_VALUE / 2,
+        /** When a screen check last found the feed gone, or null while it's showing. */
+        var goneAt: Long? = null,
     )
 
-    private val sessions = mutableMapOf<String, Session>()
+    private val visits = mutableMapOf<String, Visit>()
+
+    /** Any event from [packageName]. Long silences mean the user left the app. */
+    fun onAppActivity(packageName: String, timeMs: Long) {
+        val visit = visits[packageName] ?: return
+        if (visit.goneAt == null && timeMs - visit.lastActivityAt > AWAY_GAP_MS) {
+            visit.goneAt = visit.lastActivityAt
+        }
+        visit.lastActivityAt = timeMs
+    }
+
+    /**
+     * Result of looking at the screen: whether a reel feed is showing, at item [index] if the
+     * app says which. Returns true if a feed was just opened, which counts its first reel.
+     */
+    fun onScreen(packageName: String, timeMs: Long, feedShowing: Boolean, index: Int? = null): Boolean {
+        if (packageName !in apps) return false
+        onAppActivity(packageName, timeMs)
+        val visit = visits[packageName]
+        if (!feedShowing) {
+            if (visit != null && visit.goneAt == null) visit.goneAt = timeMs
+            return false
+        }
+        if (visit != null) {
+            val goneFor = visit.goneAt?.let { timeMs - it }
+            val briefly = goneFor == null || goneFor < REOPEN_GAP_MS
+            // Back on the exact reel they left (e.g. the screen was off): not a new one.
+            val sameReel = index != null && index == visit.furthestIndex
+            if (briefly || sameReel) {
+                visit.goneAt = null
+                return false
+            }
+        }
+        visits[packageName] = Visit(furthestIndex = index ?: -1, openedAt = timeMs, lastActivityAt = timeMs)
+        return true
+    }
 
     /** True if [sample] means the user is now on a reel they hadn't reached before. */
     fun onScroll(sample: ScrollSample): Boolean {
         val app = apps[sample.packageName] ?: return false
         if (!isReelFeed(app, sample)) return false
 
-        val session = sessions[sample.packageName]
-            ?.takeIf { it.viewId == sample.viewId && sample.timeMs - it.lastScrollAt < SESSION_GAP_MS }
-            ?: Session(sample.viewId, furthestIndex = -1, lastScrollAt = Long.MIN_VALUE / 2)
-                .also { sessions[sample.packageName] = it }
-        val sinceLastScroll = sample.timeMs - session.lastScrollAt
-        session.lastScrollAt = sample.timeMs
-
+        val time = sample.timeMs
+        onAppActivity(sample.packageName, time)
         val hasPositions = sample.itemCount > 0 && sample.fromIndex >= 0
-        if (!hasPositions) {
-            // One count per gesture: scroll events keep coming while a swipe animates.
-            return sinceLastScroll > GESTURE_GAP_MS
+        val settled = sample.toIndex < 0 || sample.toIndex == sample.fromIndex
+
+        val visit = visits[sample.packageName]?.takeIf { visit ->
+            val goneAt = visit.goneAt ?: return@takeIf true
+            // A screen check briefly missed the feed; scrolling in it means it's still there.
+            (time - goneAt < REOPEN_GAP_MS).also { if (it) visit.goneAt = null }
+        }
+        if (visit == null) {
+            // Scrolling in a feed no screen check has seen: the reel it lands on is new.
+            if (hasPositions && !settled) return false
+            visits[sample.packageName] = Visit(
+                furthestIndex = if (hasPositions) sample.fromIndex else -1,
+                openedAt = time,
+                lastActivityAt = time,
+                lastScrollAt = time,
+            )
+            return true
         }
 
-        val settled = sample.toIndex < 0 || sample.toIndex == sample.fromIndex
+        val sinceLastScroll = time - visit.lastScrollAt
+        visit.lastScrollAt = time
+        // Scroll events right after opening are the feed laying out, not a swipe.
+        val justOpened = time - visit.openedAt < OPEN_SETTLE_MS
+
+        if (!hasPositions) {
+            // One count per gesture: scroll events keep coming while a swipe animates.
+            return !justOpened && sinceLastScroll > GESTURE_GAP_MS
+        }
+
         if (!settled) return false
         val index = sample.fromIndex
         return when {
-            // First look at this feed, or it was rebuilt from the top: start counting from here.
-            session.furthestIndex < 0 || index == 0 -> {
-                session.furthestIndex = index
-                false
+            // Opened without knowing the position: learn it. Right after opening it's still
+            // the opening reel; later it's one the user swiped to.
+            visit.furthestIndex < 0 -> {
+                visit.furthestIndex = index
+                !justOpened
             }
-            index > session.furthestIndex -> {
-                session.furthestIndex = index
+            index > visit.furthestIndex -> {
+                visit.furthestIndex = index
+                true
+            }
+            // Feed rebuilt from the top (pull to refresh, tab tapped again): a fresh reel.
+            index == 0 && visit.furthestIndex > 0 -> {
+                visit.furthestIndex = 0
                 true
             }
             else -> false
@@ -75,9 +148,8 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
 
     private fun isReelFeed(app: ReelApp, sample: ScrollSample): Boolean {
         if (sample.viewId != null && sample.viewId in app.containerIds) return true
-        val fillsScreen = sample.containerHeight >= sample.screenHeight * MIN_SCREEN_FRACTION
-        val oneItemFillsIt = sample.tallestChildHeight >= sample.containerHeight * MIN_ITEM_FRACTION
-        return fillsScreen && oneItemFillsIt
+        if (sample.horizontal) return false
+        return looksLikeReelFeed(sample.containerHeight, sample.tallestChildHeight, sample.screenHeight)
     }
 
     companion object {
@@ -85,7 +157,16 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
         const val MIN_ITEM_FRACTION = 0.9
         /** Scroll events closer together than this belong to the same swipe. */
         const val GESTURE_GAP_MS = 600L
-        /** After this long without scrolling, the next scroll starts a new session. */
-        const val SESSION_GAP_MS = 10 * 60_000L
+        /** Scrolls this soon after opening a feed are its first layout, not a swipe. */
+        const val OPEN_SETTLE_MS = 1500L
+        /** A feed hidden for less than this (a sheet or dialog on top) is the same visit. */
+        const val REOPEN_GAP_MS = 4000L
+        /** No events from the app for this long means the user left it (or the screen went off). */
+        const val AWAY_GAP_MS = 45_000L
+
+        /** A list filling most of the screen whose visible item fills the list. */
+        fun looksLikeReelFeed(containerHeight: Int, tallestChildHeight: Int, screenHeight: Int): Boolean =
+            containerHeight >= screenHeight * MIN_SCREEN_FRACTION &&
+                tallestChildHeight >= containerHeight * MIN_ITEM_FRACTION
     }
 }
