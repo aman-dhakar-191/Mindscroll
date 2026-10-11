@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.DayTotal
+import io.github.amandhakar.mindscroll.data.Days
+import io.github.amandhakar.mindscroll.mascot.MemoryFacts
+import io.github.amandhakar.mindscroll.mascot.MoMemory
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.mascot.Mo
@@ -62,6 +66,11 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
     val timeByItem by remember { app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id) }
         .collectAsStateWithLifecycle(emptyList())
     val apps = AppStat.merge(byItem, timeByItem, tracker::itemLabel)
+    val mood by remember { app.metrics.observeMood(tracker.id) }.collectAsStateWithLifecycle(Mood.CHILL)
+    var memory by remember { mutableStateOf<MemoryFacts?>(null) }
+    LaunchedEffect(total) {
+        memory = runCatching { app.metrics.memoryFacts(tracker.id, tracker::itemLabel) }.getOrNull()
+    }
 
     Surface(Modifier.fillMaxSize()) {
         Column(
@@ -81,7 +90,12 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
                 }
             }
 
-            MoHeader(total)
+            Text(
+                Mo.greeting(LocalTime.now().hour, Days.today()),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            MoHeader(total, mood)
 
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(total.toString(), fontSize = 88.sp, fontWeight = FontWeight.Bold)
@@ -113,6 +127,7 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
                 }
             }
 
+            memory?.let { MemoryCard(MoMemory.insights(it)) }
             WeekCard(week)
             DisplayCard()
 
@@ -125,8 +140,8 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
 }
 
 @Composable
-private fun MoHeader(total: Long) {
-    val mood = Mood.forCount(total)
+private fun MoHeader(total: Long, mood: Mood) {
+    val rested = Mo.isRested(total, mood)
     val accent = Color(mood.color)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         MoFace(mood, Modifier.size(88.dp), reactTo = total)
@@ -141,8 +156,19 @@ private fun MoHeader(total: Long) {
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(Mo.line(total, LocalTime.now().hour), style = MaterialTheme.typography.bodyLarge)
+                Text(Mo.line(total, LocalTime.now().hour, mood, rested), style = MaterialTheme.typography.bodyLarge)
             }
+        }
+    }
+}
+
+@Composable
+private fun MemoryCard(insights: List<String>) {
+    if (insights.isEmpty()) return
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("${Mo.NAME} remembers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            insights.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
         }
     }
 }

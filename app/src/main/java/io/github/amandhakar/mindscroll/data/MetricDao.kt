@@ -29,4 +29,27 @@ interface MetricDao {
            GROUP BY day ORDER BY day""",
     )
     fun observeDailyTotals(trackerId: String, fromDay: Long, toDay: Long): Flow<List<DayTotal>>
+
+    @Query("SELECT timestamp FROM metric_event WHERE tracker_id = :trackerId AND timestamp >= :since")
+    suspend fun timesSince(trackerId: String, since: Long): List<Long>
+
+    @Query("SELECT COUNT(*) FROM metric_event WHERE tracker_id = :trackerId AND timestamp >= :from AND timestamp < :to")
+    suspend fun countBetween(trackerId: String, from: Long, to: Long): Long
+
+    @Query("SELECT MIN(day) FROM metric_event WHERE tracker_id = :trackerId")
+    suspend fun firstDay(trackerId: String): Long?
+
+    @Query(
+        """SELECT day, SUM(value) AS total FROM metric_event
+           WHERE tracker_id = :trackerId AND day BETWEEN :fromDay AND :toDay
+           GROUP BY day ORDER BY day""",
+    )
+    suspend fun dailyTotals(trackerId: String, fromDay: Long, toDay: Long): List<DayTotal>
+
+    @Query(
+        """SELECT item_key AS itemKey, SUM(value) AS total FROM metric_event
+           WHERE tracker_id = :trackerId AND day BETWEEN :fromDay AND :toDay
+           GROUP BY item_key ORDER BY total DESC""",
+    )
+    suspend fun totalsByItemBetween(trackerId: String, fromDay: Long, toDay: Long): List<ItemTotal>
 }

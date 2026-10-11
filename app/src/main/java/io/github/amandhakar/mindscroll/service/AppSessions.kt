@@ -5,7 +5,13 @@ package io.github.amandhakar.mindscroll.service
  * the live timer counts from: earlier than [startedAt] by the time already spent in the app
  * today, so reopening the app resumes the timer instead of restarting it at 0:00.
  */
-data class AppSession(val packageName: String, val startedAt: Long, val timerBase: Long = startedAt)
+data class AppSession(
+    val packageName: String,
+    val startedAt: Long,
+    val timerBase: Long = startedAt,
+    /** Which open of this app today this is: 1 for the first. */
+    val openNumber: Int = 1,
+)
 
 /** Time spent in an app that hasn't been saved yet. */
 data class AppUsage(val packageName: String, val ms: Long)
@@ -34,6 +40,7 @@ class AppSessions(
 
     private var day = today()
     private val usedToday = mutableMapOf<String, Long>()
+    private val opensToday = mutableMapOf<String, Int>()
 
     /** Any event from [packageName]: it's in front and being used. */
     fun onAppEvent(packageName: String, now: Long) {
@@ -45,7 +52,14 @@ class AppSessions(
         }
         // Switching straight from another watched app: close that one first.
         if (current != null) end()
-        current = AppSession(packageName, startedAt = now, timerBase = now - (usedToday[packageName] ?: 0))
+        val openNumber = (opensToday[packageName] ?: 0) + 1
+        opensToday[packageName] = openNumber
+        current = AppSession(
+            packageName,
+            startedAt = now,
+            timerBase = now - (usedToday[packageName] ?: 0),
+            openNumber = openNumber,
+        )
         lastSeenAt = now
         countedUntil = now
     }
@@ -102,6 +116,7 @@ class AppSessions(
         current?.let { takeCurrentUsage(it.packageName) }
         day = newDay
         usedToday.clear()
+        opensToday.clear()
         current = current?.copy(timerBase = now)
     }
 

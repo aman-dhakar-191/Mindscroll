@@ -38,12 +38,14 @@ class TrackerAccessibilityService : AccessibilityService() {
     private lateinit var scope: CoroutineScope
     private lateinit var overlay: CounterOverlay
     private lateinit var appSessions: AppSessionWatcher
+    private lateinit var brain: MoBrain
     private val hosts = mutableMapOf<String, TrackerHost>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
+        brain = MoBrain(this, overlay, app.metrics, scope).also { it.start() }
         val metrics = app.metrics
         val appScope = app.appScope
         appSessions = AppSessionWatcher(this, TrackerRegistry.watchedPackages()?.toSet().orEmpty()) { usage ->
@@ -74,18 +76,22 @@ class TrackerAccessibilityService : AccessibilityService() {
             app.metrics.observeTodayByItem(primary.id),
             app.metrics.observeDailyTotals(primary.id, 7),
             app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id),
-        ) { total, byItem, week, time ->
-            CounterState(total, AppStat.merge(byItem, time, primary::itemLabel), week)
+            app.metrics.observeMood(primary.id),
+        ) { total, byItem, week, time, mood ->
+            CounterState(total, AppStat.merge(byItem, time, primary::itemLabel), week, mood)
         }
             // Each new reel updates all three queries; show the settled result once.
             .debounce(150)
             .distinctUntilChanged()
         scope.launch {
-            combine(state, app.settings.observeDisplay()) { s, d -> s to d }.collect { (state, display) ->
-                CounterNotification.show(this@TrackerAccessibilityService, state)
-                overlay.show(state, display)
-                CounterWidget.update(this@TrackerAccessibilityService, state.total)
-            }
+            combine(state, brain.asleep) { s, asleep -> s.copy(asleep = asleep) }
+                .combine(app.settings.observeDisplay()) { s, d -> s to d }
+                .collect { (state, display) ->
+                    CounterNotification.show(this@TrackerAccessibilityService, state)
+                    overlay.show(state, display)
+                    CounterWidget.update(this@TrackerAccessibilityService, state)
+                    brain.onCounter(state.total, state.mood)
+                }
         }
         // Live timer in the camera patch while a watched app is in use. It resumes from the
         // time already saved today, so reopening an app continues its timer.
@@ -94,7 +100,15 @@ class TrackerAccessibilityService : AccessibilityService() {
             appSessions.addSavedToday(saved.associate { it.itemKey to it.total })
         }
         scope.launch {
-            appSessions.session.collect { overlay.setSession(it) }
+            var previous: AppSession? = null
+            appSessions.session.collect { session ->
+                overlay.setSession(session)
+                // A new open (not the same session updating its timer): Mo may have something to say.
+                if (session != null && previous?.startedAt != session.startedAt) {
+                    brain.onSessionStarted(session, primary.itemLabel(session.packageName))
+                }
+                previous = session
+            }
         }
     }
 
@@ -117,6 +131,7 @@ class TrackerAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         // Saves unsaved screen time (on the app scope, which outlives this service).
         if (::appSessions.isInitialized) appSessions.stop()
+        if (::brain.isInitialized) brain.stop()
         if (::scope.isInitialized) scope.cancel()
         if (::overlay.isInitialized) overlay.removeAll()
         CounterNotification.cancel(this)

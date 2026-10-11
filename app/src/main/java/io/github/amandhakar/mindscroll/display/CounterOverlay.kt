@@ -31,6 +31,7 @@ import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
+import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.service.AppSession
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import io.github.amandhakar.mindscroll.ui.MainActivity
@@ -59,6 +60,9 @@ class CounterOverlay(
     private var panel: PanelViews? = null
     private var panelClosedAt = 0L
 
+    private var speech: View? = null
+    private var moAsleep = false
+
     private var state: CounterState? = null
     private var display = Settings.Display(cameraPatch = false, bubble = false)
 
@@ -82,7 +86,7 @@ class CounterOverlay(
         display = newDisplay
 
         if (display.cameraPatch && isPortrait()) {
-            val views = patch ?: addPatch()?.also { patch = it }
+            val views = patch ?: addPatch()?.also { patch = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
                 it.count.text = compact(newState.total)
@@ -93,7 +97,7 @@ class CounterOverlay(
         }
 
         if (display.bubble) {
-            val views = bubble ?: addBubble()?.also { bubble = it }
+            val views = bubble ?: addBubble()?.also { bubble = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
                 it.count.text = compact(newState.total)
@@ -114,7 +118,83 @@ class CounterOverlay(
         state?.let { show(it, display) }
     }
 
+    /** Mo dozes off (true) or is put back to sleep; the patch and bubble show a sleeping Mo. */
+    fun setAsleep(asleep: Boolean) {
+        moAsleep = asleep
+        patch?.mo?.asleep = asleep
+        bubble?.mo?.asleep = asleep
+    }
+
+    /** Mo wakes up with a stretch and a yawn. */
+    fun wakeUp() {
+        moAsleep = false
+        patch?.mo?.wakeUp()
+        bubble?.mo?.wakeUp()
+    }
+
+    /**
+     * Mo says something: a speech bubble under the camera patch (or the floating bubble), for
+     * a few seconds or until tapped. Skipped while the panel is open or nothing shows Mo.
+     */
+    fun say(text: String) {
+        if (panel != null) return
+        val patchViews = patch
+        val bubbleViews = bubble
+        val params = overlayParams(touchable = true)
+        val speaker: MoView
+        when {
+            patchViews != null -> {
+                speaker = patchViews.mo
+                params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                params.x = patchViews.params.x + patchViews.params.width / 2 - screenWidth() / 2
+                params.y = patchViews.bottomY + dp(6)
+            }
+            bubbleViews != null -> {
+                speaker = bubbleViews.mo
+                val at = bubbleViews.root.layoutParams as WindowManager.LayoutParams
+                params.gravity = Gravity.TOP or Gravity.START
+                params.x = at.x
+                params.y = at.y + dp(64)
+            }
+            else -> return
+        }
+        removeSpeech()
+        val accent = (state?.mood ?: Mood.CHILL).color.toInt()
+        val view = TextView(service).apply {
+            this.text = text
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            maxWidth = dp(260)
+            setPadding(dp(14), dp(9), dp(14), dp(10))
+            background = GradientDrawable().apply {
+                setColor(Color.BLACK)
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), accent)
+            }
+            contentDescription = "${Mo.NAME} says: $text"
+            setOnClickListener { removeSpeech() }
+        }
+        if (!add(view, params)) return
+        speech = view
+        if (speaker.asleep) speaker.wakeUp() else speaker.react()
+        view.alpha = 0f
+        view.translationY = -dp(6).toFloat()
+        view.animate().alpha(1f).translationY(0f).setDuration(200).setInterpolator(DecelerateInterpolator()).start()
+        handler.removeCallbacks(hideSpeech)
+        handler.postDelayed(hideSpeech, SPEECH_MS + text.length * SPEECH_MS_PER_CHAR)
+    }
+
+    private val hideSpeech = Runnable { removeSpeech() }
+
+    private fun removeSpeech() {
+        handler.removeCallbacks(hideSpeech)
+        val view = speech ?: return
+        speech = null
+        view.animate().alpha(0f).setDuration(150).withEndAction { remove(view) }.start()
+    }
+
     fun removeAll() {
+        removeSpeech()
         removePatch()
         bubble?.let { remove(it.root) }
         bubble = null
@@ -323,6 +403,8 @@ class CounterOverlay(
     @SuppressLint("ClickableViewAccessibility")
     private fun openPanel() {
         val current = state ?: return
+        removeSpeech()
+        if (moAsleep) wakeUp()
         val views = PanelViews(
             context = service,
             dp = ::dp,
@@ -440,6 +522,9 @@ class CounterOverlay(
     private companion object {
         const val PANEL_TIMEOUT_MS = 10_000L
         const val PATCH_PADDING_DP = 8
+        /** How long a speech bubble stays up: a base plus reading time. */
+        const val SPEECH_MS = 3_000L
+        const val SPEECH_MS_PER_CHAR = 40L
     }
 }
 

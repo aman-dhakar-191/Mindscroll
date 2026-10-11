@@ -57,7 +57,7 @@ object CounterNotification {
         val notification = Notification.Builder(context, CHANNEL_COUNTER)
             .setSmallIcon(countIcon(context, state.total))
             .setLargeIcon(moIcon(context, state))
-            .setContentTitle("${state.total} ${tracker.title.lowercase()} today · ${Mo.NAME} is ${state.mood.title.lowercase()}")
+            .setContentTitle("${state.total} ${tracker.title.lowercase()} today · ${Mo.NAME} is ${if (state.asleep) "asleep" else state.mood.title.lowercase()}")
             .setContentText(line)
             .setStyle(Notification.BigTextStyle().bigText(if (breakdown.isEmpty()) line else "$line\n$breakdown"))
             .setColor(state.mood.color.toInt())
@@ -72,12 +72,13 @@ object CounterNotification {
         context.getSystemService(NotificationManager::class.java).cancel(ID_OFF)
     }
 
-    private var moIconCache: Pair<Mood, Icon>? = null
+    private var moIconCache: Pair<Pair<Mood, Boolean>, Icon>? = null
 
     private fun moIcon(context: Context, state: CounterState): Icon {
-        moIconCache?.let { (mood, icon) -> if (mood == state.mood) return icon }
+        val key = state.mood to state.asleep
+        moIconCache?.let { (cachedKey, icon) -> if (cachedKey == key) return icon }
         val size = (64 * context.resources.displayMetrics.density).toInt()
-        return Icon.createWithBitmap(MoPainter.bitmap(size, state.mood)).also { moIconCache = state.mood to it }
+        return Icon.createWithBitmap(MoPainter.bitmap(size, state.mood, state.asleep)).also { moIconCache = key to it }
     }
 
     fun cancel(context: Context) {

@@ -7,12 +7,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
-import java.time.LocalTime
 import io.github.amandhakar.mindscroll.R
 import io.github.amandhakar.mindscroll.app
-import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoPainter
-import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import io.github.amandhakar.mindscroll.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -31,18 +28,19 @@ class CounterWidget : AppWidgetProvider() {
     }
 
     companion object {
-        fun update(context: Context, total: Long) {
+        fun update(context: Context, state: CounterState) {
+            val total = state.total
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(ComponentName(context, CounterWidget::class.java))
             if (ids.isEmpty()) return
-            val mood = Mood.forCount(total)
+            val mood = state.mood
             val moSize = (56 * context.resources.displayMetrics.density).toInt()
             val views = RemoteViews(context.packageName, R.layout.widget_counter).apply {
-                setImageViewBitmap(R.id.widget_mo, MoPainter.bitmap(moSize, mood))
+                setImageViewBitmap(R.id.widget_mo, MoPainter.bitmap(moSize, mood, state.asleep))
                 setTextViewText(R.id.widget_count, total.toString())
                 setTextViewText(R.id.widget_label, "${TrackerRegistry.primary.title.lowercase()} today")
                 setTextColor(R.id.widget_label, mood.color.toInt())
-                setTextViewText(R.id.widget_line, Mo.line(total, LocalTime.now().hour))
+                setTextViewText(R.id.widget_line, state.line())
                 setOnClickPendingIntent(
                     R.id.widget_root,
                     PendingIntent.getActivity(
@@ -60,7 +58,9 @@ class CounterWidget : AppWidgetProvider() {
             val appContext = context.applicationContext
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    update(appContext, appContext.app.metrics.todayTotal(TrackerRegistry.primary.id))
+                    val metrics = appContext.app.metrics
+                    val id = TrackerRegistry.primary.id
+                    update(appContext, CounterState(metrics.todayTotal(id), emptyList(), emptyList(), metrics.moodNow(id)))
                 } finally {
                     pending?.finish()
                 }
