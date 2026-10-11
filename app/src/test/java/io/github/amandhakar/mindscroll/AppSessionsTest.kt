@@ -12,7 +12,10 @@ class AppSessionsTest {
     private val yt = "com.google.android.youtube"
     private val launcher = "com.android.launcher3"
 
-    private fun sessions() = AppSessions(setOf(ig, yt))
+    private var day = 100L
+    private fun sessions() = AppSessions(setOf(ig, yt)) { day }
+
+    // --- Sessions ---
 
     @Test
     fun startsOnFirstEventAndKeepsItsStartTime() {
@@ -20,7 +23,7 @@ class AppSessionsTest {
         s.onAppEvent(ig, 1_000)
         s.onAppEvent(ig, 5_000)
         s.onCheck(ig, interactive = true, now = 6_000)
-        assertEquals(AppSession(ig, 1_000), s.current)
+        assertEquals(AppSession(ig, startedAt = 1_000, timerBase = 1_000), s.current)
     }
 
     @Test
@@ -49,31 +52,11 @@ class AppSessionsTest {
     }
 
     @Test
-    fun comingBackQuicklyContinuesTheTimer() {
-        val s = sessions()
-        s.onAppEvent(ig, 0)
-        s.onCheck(launcher, interactive = true, now = 4_000) // ended
-        assertNull(s.current)
-        s.onAppEvent(ig, 4_000 + AppSessions.RESUME_MS - 1)
-        assertEquals(AppSession(ig, 0), s.current)
-    }
-
-    @Test
-    fun comingBackLaterStartsAFreshTimer() {
-        val s = sessions()
-        s.onAppEvent(ig, 0)
-        s.onCheck(launcher, interactive = true, now = 4_000)
-        val later = 4_000 + AppSessions.RESUME_MS + 1
-        s.onAppEvent(ig, later)
-        assertEquals(AppSession(ig, later), s.current)
-    }
-
-    @Test
-    fun switchingBetweenWatchedAppsStartsTheOtherAppsTimer() {
+    fun switchingBetweenWatchedAppsStartsTheOtherAppsSession() {
         val s = sessions()
         s.onAppEvent(ig, 0)
         s.onAppEvent(yt, 60_000)
-        assertEquals(AppSession(yt, 60_000), s.current)
+        assertEquals(AppSession(yt, startedAt = 60_000, timerBase = 60_000), s.current)
     }
 
     @Test
@@ -84,6 +67,60 @@ class AppSessionsTest {
         assertEquals(ig, s.current?.packageName)
         s.onCheck(null, interactive = true, now = AppSessions.UNKNOWN_MS)
         assertNull(s.current)
+    }
+
+    // --- Timer resumes from today's time ---
+
+    @Test
+    fun reopeningAnAppResumesItsTimerFromTodaysTime() {
+        val s = sessions()
+        s.onAppEvent(ig, 0)
+        s.onCheck(ig, interactive = true, now = 60_000)
+        s.onCheck(launcher, interactive = true, now = 70_000) // ended after 60 s in the app
+        s.onAppEvent(ig, 600_000) // ten minutes later
+        // The timer shows 1:00 right away: it counts from 60 s before now.
+        assertEquals(600_000L - 60_000L, s.current?.timerBase)
+    }
+
+    @Test
+    fun eachAppKeepsItsOwnTimer() {
+        val s = sessions()
+        s.onAppEvent(ig, 0)
+        s.onAppEvent(ig, 30_000)
+        s.onAppEvent(yt, 31_000) // YouTube starts from its own 0:00
+        assertEquals(31_000L, s.current?.timerBase)
+        s.onAppEvent(yt, 41_000)
+        s.onAppEvent(ig, 41_000) // back to Instagram: resumes from its 30 s
+        assertEquals(41_000L - 30_000L, s.current?.timerBase)
+    }
+
+    @Test
+    fun savedTimeFromEarlierTodayIsIncluded() {
+        val s = sessions()
+        s.addSavedToday(mapOf(ig to 20 * 60_000L)) // 20 min saved before the service started
+        s.onAppEvent(ig, 1_000_000)
+        assertEquals(1_000_000L - 20 * 60_000L, s.current?.timerBase)
+    }
+
+    @Test
+    fun savedTimeArrivingMidSessionMovesTheRunningTimer() {
+        val s = sessions()
+        s.onAppEvent(ig, 1_000_000)
+        s.addSavedToday(mapOf(ig to 5 * 60_000L, yt to 60_000L))
+        assertEquals(1_000_000L - 5 * 60_000L, s.current?.timerBase)
+    }
+
+    @Test
+    fun timersStartOverAtMidnight() {
+        val s = sessions()
+        s.onAppEvent(ig, 0)
+        s.onCheck(ig, interactive = true, now = 60_000)
+        day++ // midnight
+        s.onCheck(ig, interactive = true, now = 61_000)
+        assertEquals(61_000L, s.current?.timerBase) // running timer restarts at 0:00
+        s.onCheck(launcher, interactive = true, now = 70_000)
+        s.onAppEvent(ig, 100_000)
+        assertEquals(100_000L - 1_000L, s.current?.timerBase) // only today's 1 s counts
     }
 
     // --- Screen time ledger ---
@@ -112,15 +149,13 @@ class AppSessionsTest {
     }
 
     @Test
-    fun resumedSessionDoesNotCountTheGap() {
+    fun timeAwayBetweenSessionsIsNotCounted() {
         val s = sessions()
         s.onAppEvent(ig, 0)
         s.onCheck(ig, interactive = true, now = 10_000)
         s.onCheck(launcher, interactive = true, now = 13_000) // ended, 10 s used
-        s.onAppEvent(ig, 18_000) // back within RESUME_MS: same timer...
+        s.onAppEvent(ig, 18_000)
         s.onCheck(ig, interactive = true, now = 28_000)
-        assertEquals(0L, s.current?.startedAt)
-        // ...but only time actually in the app counts: 10 s + 10 s.
         assertEquals(20_000L, s.drainUsage().sumOf { it.ms })
     }
 
