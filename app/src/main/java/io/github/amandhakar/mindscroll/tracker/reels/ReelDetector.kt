@@ -37,7 +37,10 @@ data class ScrollSample(
  * catches opening a feed before anything scrolls) and [onAppActivity] (any event from the app,
  * so a long silence reads as having left it).
  */
-class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) {
+class ReelDetector(
+    /** The tracked app for a package, or null to ignore it. */
+    private val appFor: (String) -> ReelApp? = ReelApps.known::get,
+) {
 
     private class Visit(
         /** Furthest item position counted, -1 if not known yet. */
@@ -70,7 +73,7 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
      * app says which. Returns true if a feed was just opened, which counts its first reel.
      */
     fun onScreen(packageName: String, timeMs: Long, feedShowing: Boolean, index: Int? = null): Boolean {
-        if (packageName !in apps) return no("not a reel app")
+        if (appFor(packageName) == null) return no("not a tracked app")
         onAppActivity(packageName, timeMs)
         val visit = visits[packageName]
         if (!feedShowing) {
@@ -96,7 +99,7 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
 
     /** True if [sample] means the user is now on a reel they hadn't reached before. */
     fun onScroll(sample: ScrollSample): Boolean {
-        val app = apps[sample.packageName] ?: return no("not a reel app")
+        val app = appFor(sample.packageName) ?: return no("not a tracked app")
         if (!isReelFeed(app, sample)) return no("not a reel feed")
 
         val time = sample.timeMs
@@ -165,7 +168,7 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
     }
 
     /** Whether [sample] scrolled a reel feed (by known id or by shape). */
-    fun isReelFeed(sample: ScrollSample): Boolean = apps[sample.packageName]?.let { isReelFeed(it, sample) } ?: false
+    fun isReelFeed(sample: ScrollSample): Boolean = appFor(sample.packageName)?.let { isReelFeed(it, sample) } ?: false
 
     private fun isReelFeed(app: ReelApp, sample: ScrollSample): Boolean {
         if (sample.viewId != null && sample.viewId in app.containerIds) return true

@@ -5,17 +5,31 @@ import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
+import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.Tracker
 import io.github.amandhakar.mindscroll.tracker.TrackerHost
 
-/** Counts reels and shorts watched, per app. Item key = app package name. */
+/**
+ * Counts reels and shorts watched in the tracked apps, per app. Item key = app package name.
+ * Works in any app with a full-screen, one-at-a-time feed; known apps add feed-id hints.
+ */
 class ReelTracker(
-    private val detector: ReelDetector = ReelDetector(),
     private val screenHeight: () -> Int = { android.content.res.Resources.getSystem().displayMetrics.heightPixels },
 ) : Tracker {
     override val id = ID
     override val title = "Reels"
-    override val watchedPackages: Set<String> = ReelApps.byPackage.keys
+    override val watchedPackages: Set<String> get() = TrackedApps.packages.value
+
+    /** A tracked app with its hints, or null if [packageName] isn't tracked. */
+    private fun appFor(packageName: String): ReelApp? {
+        if (!TrackedApps.isTracked(packageName)) return null
+        val label = TrackedApps.label(packageName)
+        return apps[packageName]?.takeIf { it.label == label }
+            ?: ReelApps.forPackage(packageName, label).also { apps[packageName] = it }
+    }
+
+    private val apps = mutableMapOf<String, ReelApp>()
+    private val detector = ReelDetector(::appFor)
     override val eventTypes = AccessibilityEvent.TYPE_VIEW_SCROLLED or
         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
         AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
@@ -28,7 +42,7 @@ class ReelTracker(
 
     override fun onAccessibilityEvent(event: AccessibilityEvent, host: TrackerHost) {
         val packageName = event.packageName?.toString() ?: return
-        val app = ReelApps.byPackage[packageName] ?: return
+        val app = appFor(packageName) ?: return
         try {
             handle(event, app, host)
         } catch (e: RuntimeException) {
@@ -37,7 +51,7 @@ class ReelTracker(
         }
     }
 
-    override fun itemLabel(itemKey: String): String = ReelApps.byPackage[itemKey]?.label ?: itemKey
+    override fun itemLabel(itemKey: String): String = TrackedApps.label(itemKey)
 
     private fun handle(event: AccessibilityEvent, app: ReelApp, host: TrackerHost) {
         val time = event.eventTime

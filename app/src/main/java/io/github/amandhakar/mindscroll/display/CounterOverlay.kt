@@ -33,6 +33,7 @@ import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.service.AppSession
+import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import io.github.amandhakar.mindscroll.ui.MainActivity
 import kotlin.math.abs
@@ -287,12 +288,12 @@ class CounterOverlay(
             views.root.contentDescription = "Mindscroll: today's reels. Tap for details."
             return
         }
-        val app = ReelApps.byPackage[current.packageName]
+        val app = ReelApps.forPackage(current.packageName, TrackedApps.label(current.packageName))
         views.timer.base = current.timerBase
-        views.timer.setTextColor(app?.accent?.toInt() ?: Color.WHITE)
+        views.timer.setTextColor(app.accent.toInt())
         views.timer.visibility = View.VISIBLE
         views.timer.start()
-        views.root.contentDescription = "Mindscroll: time in ${app?.label ?: "this app"} and today's reels. Tap for details."
+        views.root.contentDescription = "Mindscroll: time in ${app.label} and today's reels. Tap for details."
     }
 
     /**

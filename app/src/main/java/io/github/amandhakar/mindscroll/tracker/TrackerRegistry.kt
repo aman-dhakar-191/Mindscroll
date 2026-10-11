@@ -13,7 +13,10 @@ object TrackerRegistry {
     /** The tracker whose daily total the notification, overlay and widget show. */
     val primary: Tracker = reels
 
-    /** Packages the accessibility service should listen to, or null for every app. */
+    /**
+     * Packages the accessibility service should listen to, or null for every app. Asked again
+     * whenever the tracked apps change.
+     */
     fun watchedPackages(): Array<String>? {
         val packages = all.flatMap { it.watchedPackages }.toSet()
         return if (Tracker.ALL_PACKAGES.first() in packages) null else packages.toTypedArray()

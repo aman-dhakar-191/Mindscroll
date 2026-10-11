@@ -41,6 +41,12 @@ class AppSessionWatcher(
         }
     }
 
+    /** Which apps are tracked changed. */
+    fun setPackages(packages: Set<String>) {
+        sessions.setPackages(packages)
+        publish()
+    }
+
     /** Today's saved screen time per app, so a reopened app's timer resumes from it. */
     fun addSavedToday(saved: Map<String, Long>) {
         sessions.addSavedToday(saved)

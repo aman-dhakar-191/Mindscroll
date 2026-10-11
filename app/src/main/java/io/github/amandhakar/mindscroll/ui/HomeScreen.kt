@@ -48,6 +48,7 @@ import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.Mood
+import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import java.time.LocalDate
 import java.time.LocalTime
@@ -55,7 +56,12 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 @Composable
-fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog: () -> Unit) {
+fun HomeScreen(
+    permissions: PermissionState,
+    onOpenSetup: () -> Unit,
+    onOpenLog: () -> Unit,
+    onOpenApps: () -> Unit,
+) {
     val context = LocalContext.current
     val app = context.app
     val tracker = TrackerRegistry.primary
@@ -129,6 +135,7 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
 
             memory?.let { MemoryCard(MoMemory.insights(it)) }
             WeekCard(week)
+            TrackedAppsCard(onOpenApps)
             DisplayCard()
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
@@ -214,6 +221,23 @@ private fun WeekCard(week: List<DayTotal>) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackedAppsCard(onOpenApps: () -> Unit) {
+    val tracked by TrackedApps.packages.collectAsStateWithLifecycle()
+    val names = tracked.map(TrackedApps::label).sorted()
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Apps to track", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                if (names.isEmpty()) "None yet. Pick the apps Mo should keep an eye on." else names.joinToString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FilledTonalButton(onClick = onOpenApps) { Text("Choose apps") }
         }
     }
 }

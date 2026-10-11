@@ -1,8 +1,12 @@
 # Mindscroll
 
-A personal digital wellbeing tracker for Android. Version 1 counts the reels and shorts you
-watch in **Instagram**, **YouTube Shorts** and **Facebook**, and keeps today's number in front
-of you, with **Mo** keeping you company:
+A personal digital wellbeing tracker for Android. It counts the reels and shorts you watch and
+the time you spend in the apps you choose to track (Instagram, YouTube and Facebook to start),
+and keeps today's numbers in front of you, with **Mo** keeping you company:
+
+- **Apps to track:** pick any app on the phone from a searchable list (home screen → *Choose
+  apps*). Tracked apps get reel counting, screen time, the live timer and Mo's remarks; changes
+  apply right away.
 
 - **Status bar / notification:** the count itself is the status bar icon. The notification
   shows Mo, what Mo thinks of today so far, and a per-app breakdown.
@@ -10,7 +14,7 @@ of you, with **Mo** keeping you company:
   the other. Tap it to open a panel with Mo's take, per-app counts and the last 7 days. It's
   drawn by the accessibility service, which can draw above the status bar. A notification can't
   do that.
-- **Live timer:** while Instagram, YouTube or Facebook is open, the camera patch widens to show
+- **Live timer:** while a tracked app is open, the camera patch widens to show
   a ticking timer in the app's color, next to Mo. It shows today's total time in that app, so
   reopening the app resumes the timer instead of restarting it, and it starts over at midnight.
   It stops a few seconds after you leave the app or the screen turns off. That time is also
@@ -68,9 +72,9 @@ service draws them.
 
 ## How reels are counted
 
-The accessibility service only listens to Instagram, YouTube and Facebook. Within those, it
-looks for a *reel feed*: either a known feed view id, or a list that fills most of the screen
-while one item fills the list. That rule filters out normal feeds, and sideways pagers like
+The accessibility service only listens to the tracked apps. Within those, it looks for a *reel
+feed*: either a known (or learned) feed view id, or a list that fills most of the screen while
+one item fills the list, so it works in any app with a TikTok-style feed. That rule filters out normal feeds, and sideways pagers like
 stories are skipped.
 
 - **Opening a feed counts its first reel.** This covers the Reels tab, tapping a reel in the
@@ -85,8 +89,9 @@ stories are skipped.
 
 If an app doesn't report item positions, each separate swipe gesture counts once instead. These
 rules live in [`ReelDetector`](app/src/main/java/io/github/amandhakar/mindscroll/tracker/reels/ReelDetector.kt).
-They're unit tested, and the per-app view ids are in
-[`ReelApps`](app/src/main/java/io/github/amandhakar/mindscroll/tracker/reels/ReelApps.kt).
+They're unit tested, and the feed-id hints for known apps are in
+[`ReelApps`](app/src/main/java/io/github/amandhakar/mindscroll/tracker/reels/ReelApps.kt);
+which apps are tracked is the user's choice (`TrackedApps`, saved in `Settings`).
 Apps rename their internal views now and then, so if counts look off after an app update,
 start there.
 
@@ -114,7 +119,7 @@ Daily totals, per-app breakdowns and multi-day series are all `SUM` queries in
 
 | Feature | Where it plugs in |
 | --- | --- |
-| Screen time for every app | Done for Instagram, YouTube and Facebook: `ScreenTimeTracker` (`id = "screen_time"`, `item_key` = package, `value` = ms), recorded by the service's app session watcher. Covering every app means reading `UsageStatsManager` from a periodic worker under the same tracker id, which needs the usage-access permission in onboarding. |
+| Screen time for every app | Done for every tracked app: `ScreenTimeTracker` (`id = "screen_time"`, `item_key` = package, `value` = ms), recorded by the service's app session watcher. Covering every app means reading `UsageStatsManager` from a periodic worker under the same tracker id, which needs the usage-access permission in onboarding. |
 | Daily limits + gentle nudges | A `limit` table (`tracker_id`, `item_key`, `daily_limit`), added with a Room migration, plus a nudge component that collects `observeTodayTotal` / `observeTodayByItem` and posts a notification or briefly changes the camera patch color when a limit is crossed. The service already collects these flows for the displays. |
 | Weekly stats | `MetricsRepository.observeDailyTotals(trackerId, days)` already returns zero-filled day series. The home screen's 7-day chart uses it. `timestamp` is stored for hour-of-day breakdowns later. |
 
