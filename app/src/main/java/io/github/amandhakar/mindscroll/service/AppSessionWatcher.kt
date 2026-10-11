@@ -10,13 +10,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Tracks which watched app is in use right now, for the live timer in the camera patch. The
- * service only gets events from watched apps, so leaving one is noticed by checking the app in
- * front once a second, and only while a session is running.
+ * Tracks which watched app is in use right now, for the live timer in the camera patch, and
+ * hands time used to [onUsage] for screen time: once a minute during a long session, and when
+ * a session ends. The service only gets events from watched apps, so leaving one is noticed by
+ * checking the app in front once a second, and only while a session is running.
  */
 class AppSessionWatcher(
     private val service: AccessibilityService,
     packages: Set<String>,
+    private val onUsage: (AppUsage) -> Unit,
 ) {
     private val sessions = AppSessions(packages)
     private val handler = Handler(Looper.getMainLooper())
@@ -25,12 +27,15 @@ class AppSessionWatcher(
     val session: StateFlow<AppSession?> = _session.asStateFlow()
 
     private var checkScheduled = false
+    private var lastFlushAt = SystemClock.elapsedRealtime()
 
     private val check = object : Runnable {
         override fun run() {
             checkScheduled = false
             val front = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
-            sessions.onCheck(front, power.isInteractive, SystemClock.elapsedRealtime())
+            val now = SystemClock.elapsedRealtime()
+            sessions.onCheck(front, power.isInteractive, now)
+            if (sessions.current == null || now - lastFlushAt >= FLUSH_MS) flush(now)
             publish()
         }
     }
@@ -40,9 +45,16 @@ class AppSessionWatcher(
         publish()
     }
 
+    /** Stops checking and saves whatever time hasn't been saved yet. */
     fun stop() {
         handler.removeCallbacks(check)
         checkScheduled = false
+        flush(SystemClock.elapsedRealtime())
+    }
+
+    private fun flush(now: Long) {
+        lastFlushAt = now
+        sessions.drainUsage().forEach(onUsage)
     }
 
     private fun publish() {
@@ -57,5 +69,7 @@ class AppSessionWatcher(
 
     private companion object {
         const val CHECK_MS = 1_000L
+        /** Long sessions are saved in chunks, so a killed service loses at most this much. */
+        const val FLUSH_MS = 60_000L
     }
 }

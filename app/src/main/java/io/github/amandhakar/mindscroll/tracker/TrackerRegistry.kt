@@ -1,12 +1,14 @@
 package io.github.amandhakar.mindscroll.tracker
 
 import io.github.amandhakar.mindscroll.tracker.reels.ReelTracker
+import io.github.amandhakar.mindscroll.tracker.screentime.ScreenTimeTracker
 
 /** Every tracker in the app. New trackers are added here. */
 object TrackerRegistry {
     val reels = ReelTracker()
+    val screenTime = ScreenTimeTracker()
 
-    val all: List<Tracker> = listOf(reels)
+    val all: List<Tracker> = listOf(reels, screenTime)
 
     /** The tracker whose daily total the notification, overlay and widget show. */
     val primary: Tracker = reels

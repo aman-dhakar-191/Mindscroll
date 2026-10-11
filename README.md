@@ -13,7 +13,8 @@ of you, with **Mo** keeping you company:
 - **Live timer:** while Instagram, YouTube or Facebook is open, the camera patch widens to show
   a ticking timer for the current session in the app's color, next to Mo. It stops a few
   seconds after you leave the app or the screen turns off, and picks up where it left off if
-  you're back within 10 seconds.
+  you're back within 10 seconds. That time is also saved as **screen time per app**: the home
+  screen, panel and notification show it next to each app's reel count.
 - **Floating bubble:** Mo with a count badge, which you can drag anywhere. Tap it for the same
   panel. Off by default.
 - **Home screen widget** with Mo, the count and Mo's line.
@@ -97,7 +98,7 @@ Daily totals, per-app breakdowns and multi-day series are all `SUM` queries in
 
 | Feature | Where it plugs in |
 | --- | --- |
-| Screen time per app | A `ScreenTimeTracker` (`id = "screen_time"`, `item_key` = package, `value` = ms) that reads `UsageStatsManager` from a periodic worker. It doesn't use accessibility events, so its `watchedPackages` stays empty. Needs the usage-access permission in onboarding. |
+| Screen time for every app | Done for Instagram, YouTube and Facebook: `ScreenTimeTracker` (`id = "screen_time"`, `item_key` = package, `value` = ms), recorded by the service's app session watcher. Covering every app means reading `UsageStatsManager` from a periodic worker under the same tracker id, which needs the usage-access permission in onboarding. |
 | Daily limits + gentle nudges | A `limit` table (`tracker_id`, `item_key`, `daily_limit`), added with a Room migration, plus a nudge component that collects `observeTodayTotal` / `observeTodayByItem` and posts a notification or briefly changes the camera patch color when a limit is crossed. The service already collects these flows for the displays. |
 | Weekly stats | `MetricsRepository.observeDailyTotals(trackerId, days)` already returns zero-filled day series. The home screen's 7-day chart uses it. `timestamp` is stored for hour-of-day breakdowns later. |
 

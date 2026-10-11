@@ -27,6 +27,7 @@ import android.widget.Chronometer
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
@@ -456,6 +457,7 @@ private class PanelViews(
         ellipsize = TextUtils.TruncateAt.END
     }
     private val countText = text(context, 40f, color = Color.WHITE, bold = true)
+    private val countLabel = text(context, 14f).apply { setPadding(0, 0, 0, dp(8)) }
     private val apps = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private val week = WeekBarsView(context)
     private val openButton = button(context, "Open Mindscroll", filled = true, onOpenApp)
@@ -486,10 +488,7 @@ private class PanelViews(
             gravity = Gravity.BOTTOM
             setPadding(0, dp(10), 0, dp(4))
             addView(countText)
-            addView(text(context, 14f).apply {
-                text = "  reels today"
-                setPadding(0, 0, 0, dp(8))
-            })
+            addView(countLabel)
         })
         addView(apps)
         addView(week, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(72)).apply {
@@ -513,24 +512,30 @@ private class PanelViews(
         moodText.setTextColor(accent)
         lineText.text = state.line()
         countText.text = state.total.toString()
+        countLabel.text = if (state.screenTimeMs > 0) {
+            "  reels today · ${Durations.format(state.screenTimeMs)} in apps"
+        } else {
+            "  reels today"
+        }
         (openButton.background as GradientDrawable).setColor(accent)
 
         apps.removeAllViews()
-        val max = state.byItem.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
-        state.byItem.forEach { (label, count) ->
-            apps.addView(appRow(apps.context, label, count, count.toFloat() / max, accent))
+        val max = state.apps.maxOfOrNull { it.reels }?.coerceAtLeast(1) ?: 1
+        state.apps.forEach { stat ->
+            apps.addView(appRow(apps.context, stat, stat.reels.toFloat() / max, accent))
         }
         week.set(state.week, accent)
     }
 
-    private fun appRow(context: android.content.Context, label: String, count: Long, fraction: Float, accent: Int) =
+    private fun appRow(context: android.content.Context, stat: AppStat, fraction: Float, accent: Int) =
         LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(6), 0, 0)
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
-                addView(text(context, 13f).apply { text = label }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                addView(text(context, 13f, color = Color.WHITE, bold = true).apply { text = count.toString() })
+                addView(text(context, 13f).apply { text = stat.label }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                addView(text(context, 13f, color = Color.WHITE, bold = true).apply { text = stat.reels.toString() })
+                addView(text(context, 13f).apply { text = "  ·  ${Durations.format(stat.timeMs)}" })
             })
             // Track and bar.
             addView(FrameLayout(context).apply {

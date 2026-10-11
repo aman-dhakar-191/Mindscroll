@@ -17,6 +17,7 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.provider.Settings
 import io.github.amandhakar.mindscroll.R
+import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoPainter
 import io.github.amandhakar.mindscroll.mascot.Mood
@@ -51,7 +52,7 @@ object CounterNotification {
     fun show(context: Context, state: CounterState) {
         if (!canNotify(context)) return
         val tracker = TrackerRegistry.primary
-        val breakdown = state.byItem.joinToString("  ·  ") { (label, count) -> "$label $count" }
+        val breakdown = state.apps.joinToString("\n") { "${it.label}: ${it.reels} reels · ${Durations.format(it.timeMs)}" }
         val line = state.line()
         val notification = Notification.Builder(context, CHANNEL_COUNTER)
             .setSmallIcon(countIcon(context, state.total))
