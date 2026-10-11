@@ -46,7 +46,7 @@ class TrackerAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
-        brain = MoBrain(this, overlay, app.metrics, scope).also { it.start() }
+        brain = MoBrain(this, overlay, app.metrics, app.moPrefs, scope).also { it.start() }
         val metrics = app.metrics
         val appScope = app.appScope
         appSessions = AppSessionWatcher(this, TrackedApps.packages.value) { usage ->

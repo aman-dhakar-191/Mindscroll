@@ -40,8 +40,12 @@ The character bible and every line Mo says live in
 - **Speaks up.** A speech bubble pops out under the camera patch at real moments: a fast run
   of swipes, milestones, getting more frazzled, every fifth trip to an app, coming back after a
   break, waking up, and a memory of yesterday at the day's first open. At most one remark every
-  3 minutes (45 s for big moments) and 10 an hour; tap a bubble to dismiss it
-  ([`MoMoments.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMoments.kt)).
+  3 minutes (45 s for big moments) and 10 an hour, even across restarts; tap a bubble to
+  dismiss it ([`MoMoments.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMoments.kt)).
+- **Knows when to hush.** On the home screen, *Quiet at night* keeps Mo's bubbles away from
+  10 pm to 8 am, and *Quiet for an hour* hushes Mo right now. Every limit on Mo speaking lives
+  in one place, [`MoPolicy.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoPolicy.kt),
+  and is saved on the phone so a restart doesn't reset it.
 - **Sleeps and wakes.** Mo dozes off 15 minutes after the last reel and whenever the screen is
   off: eyes shut, slow breaths, a floating "z" (in the patch, bubble, widget and notification).
   Mo wakes with a stretch and a big yawn when you're back, and after a long sleep says so

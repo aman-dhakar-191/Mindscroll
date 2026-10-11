@@ -47,11 +47,17 @@ import io.github.amandhakar.mindscroll.mascot.MoMemory
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoPolicy
 import io.github.amandhakar.mindscroll.mascot.Mood
+import io.github.amandhakar.mindscroll.mascot.QuietHours
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -137,6 +143,7 @@ fun HomeScreen(
             WeekCard(week)
             TrackedAppsCard(onOpenApps)
             DisplayCard()
+            QuietCard()
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
                 TextButton(onClick = onOpenSetup) { Text("Permissions and setup") }
@@ -266,6 +273,43 @@ private fun DisplayCard() {
         }
     }
 }
+
+@Composable
+private fun QuietCard() {
+    val store = LocalContext.current.app.moPrefs
+    val policy = remember { MoPolicy(store) }
+    var quietAtNight by remember { mutableStateOf(store.profile.quietHours != null) }
+    var snoozedUntil by remember { mutableStateOf(policy.snoozedUntil(System.currentTimeMillis())) }
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Quiet", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            ToggleRow("Quiet at night", "No speech bubbles from 10 pm to 8 am. Mo still counts.", quietAtNight) {
+                quietAtNight = it
+                store.profile = store.profile.copy(quietHours = if (it) QuietHours.NIGHT else null)
+            }
+            val until = snoozedUntil
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (until == null) {
+                    Text("Need Mo to hush for a bit?", Modifier.weight(1f))
+                    FilledTonalButton(onClick = {
+                        val now = System.currentTimeMillis()
+                        policy.snooze(now, SNOOZE_MS)
+                        snoozedUntil = policy.snoozedUntil(now)
+                    }) { Text("Quiet for an hour") }
+                } else {
+                    val time = Instant.ofEpochMilli(until).atZone(ZoneId.systemDefault()).toLocalTime()
+                    Text("Quiet until ${time.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))}", Modifier.weight(1f))
+                    TextButton(onClick = {
+                        policy.unsnooze()
+                        snoozedUntil = null
+                    }) { Text("Let Mo talk") }
+                }
+            }
+        }
+    }
+}
+
+private const val SNOOZE_MS = 60 * 60_000L
 
 @Composable
 private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {

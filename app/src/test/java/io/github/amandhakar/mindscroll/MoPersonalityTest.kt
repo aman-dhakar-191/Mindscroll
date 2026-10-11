@@ -5,6 +5,7 @@ import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoMemory
 import io.github.amandhakar.mindscroll.mascot.MoMoments
 import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.MoPolicy
 import io.github.amandhakar.mindscroll.mascot.MoSleep
 import io.github.amandhakar.mindscroll.mascot.Mood
 import org.junit.Assert.assertEquals
@@ -44,7 +45,7 @@ class MoMomentsTest {
         val m = MoMoments()
         assertNotNull(m.onMood(0, Mood.CHILL).let { m.onMood(1_000, Mood.WOBBLY) })
         assertNull(m.onMood(2_000, Mood.DIZZY)) // too soon after the last remark
-        assertNotNull(m.onMood(2_000 + MoMoments.GAP_MS, Mood.SLEEPY))
+        assertNotNull(m.onMood(2_000 + MoPolicy.GAP_MS, Mood.SLEEPY))
     }
 
     @Test
@@ -84,16 +85,16 @@ class MoMomentsTest {
     @Test
     fun neverMoreThanTheHourlyLimit() {
         val m = MoMoments()
-        val said = (0 until 40).mapNotNull { i -> m.onRemark(i * MoMoments.GAP_MS / 2, "hi") }
+        val said = (0 until 40).mapNotNull { i -> m.onRemark(i * MoPolicy.GAP_MS / 2, "hi") }
         // 40 tries over an hour; only one per GAP_MS gets through, and never more than the cap.
-        assertTrue(said.size <= MoMoments.MAX_PER_HOUR)
+        assertTrue(said.size <= MoPolicy.MAX_PER_HOUR)
     }
 
     @Test
     fun linesTakeTurnsInsteadOfRepeating() {
         val m = MoMoments()
         val first = m.onAppOpened(0, "YouTube", 5)
-        val second = m.onAppOpened(MoMoments.GAP_MS, "YouTube", 10)
+        val second = m.onAppOpened(MoPolicy.GAP_MS, "YouTube", 10)
         assertTrue(first != second)
     }
 }
