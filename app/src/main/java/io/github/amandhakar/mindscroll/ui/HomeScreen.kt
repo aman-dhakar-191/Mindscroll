@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.DayTotal
+import io.github.amandhakar.mindscroll.data.Durations
+import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
@@ -57,6 +59,9 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
     val total by remember { app.metrics.observeTodayTotal(tracker.id) }.collectAsStateWithLifecycle(0L)
     val byItem by remember { app.metrics.observeTodayByItem(tracker.id) }.collectAsStateWithLifecycle(emptyList())
     val week by remember { app.metrics.observeDailyTotals(tracker.id, 7) }.collectAsStateWithLifecycle(emptyList())
+    val timeByItem by remember { app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id) }
+        .collectAsStateWithLifecycle(emptyList())
+    val apps = AppStat.merge(byItem, timeByItem, tracker::itemLabel)
 
     Surface(Modifier.fillMaxSize()) {
         Column(
@@ -83,13 +88,25 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
                 Text("${tracker.title.lowercase()} today", style = MaterialTheme.typography.titleMedium)
             }
 
-            if (byItem.isNotEmpty()) {
+            if (apps.isNotEmpty()) {
                 Card {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        byItem.forEach {
+                        Row(Modifier.fillMaxWidth()) {
+                            Text("Today", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "${Durations.format(apps.sumOf { it.timeMs })} in apps",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        apps.forEach {
                             Row(Modifier.fillMaxWidth()) {
-                                Text(tracker.itemLabel(it.itemKey), Modifier.weight(1f))
-                                Text(it.total.toString(), fontWeight = FontWeight.SemiBold)
+                                Text(it.label, Modifier.weight(1f))
+                                Text("${it.reels} reels", fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "  ·  ${Durations.format(it.timeMs)}",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -112,7 +129,7 @@ private fun MoHeader(total: Long) {
     val mood = Mood.forCount(total)
     val accent = Color(mood.color)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        MoFace(mood, Modifier.size(88.dp))
+        MoFace(mood, Modifier.size(88.dp), reactTo = total)
         Card(
             shape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp),
             colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.18f)),

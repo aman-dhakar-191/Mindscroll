@@ -10,6 +10,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.display.CounterNotification
 import io.github.amandhakar.mindscroll.display.CounterOverlay
+import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.display.CounterState
 import io.github.amandhakar.mindscroll.display.CounterWidget
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
@@ -35,12 +36,18 @@ class TrackerAccessibilityService : AccessibilityService() {
 
     private lateinit var scope: CoroutineScope
     private lateinit var overlay: CounterOverlay
+    private lateinit var appSessions: AppSessionWatcher
     private val hosts = mutableMapOf<String, TrackerHost>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
+        val metrics = app.metrics
+        val appScope = app.appScope
+        appSessions = AppSessionWatcher(this, TrackerRegistry.watchedPackages()?.toSet().orEmpty()) { usage ->
+            appScope.launch { metrics.record(TrackerRegistry.screenTime.id, usage.packageName, usage.ms) }
+        }
 
         // Listen only to what the registered trackers need.
         serviceInfo = serviceInfo.apply {
@@ -65,8 +72,9 @@ class TrackerAccessibilityService : AccessibilityService() {
             app.metrics.observeTodayTotal(primary.id),
             app.metrics.observeTodayByItem(primary.id),
             app.metrics.observeDailyTotals(primary.id, 7),
-        ) { total, byItem, week ->
-            CounterState(total, byItem.map { primary.itemLabel(it.itemKey) to it.total }, week)
+            app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id),
+        ) { total, byItem, week, time ->
+            CounterState(total, AppStat.merge(byItem, time, primary::itemLabel), week)
         }
             // Each new reel updates all three queries; show the settled result once.
             .debounce(150)
@@ -78,9 +86,14 @@ class TrackerAccessibilityService : AccessibilityService() {
                 CounterWidget.update(this@TrackerAccessibilityService, state.total)
             }
         }
+        // Live timer in the camera patch while a watched app is in use.
+        scope.launch {
+            appSessions.session.collect { overlay.setSession(it) }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (::appSessions.isInitialized) event.packageName?.let { appSessions.onAppEvent(it.toString()) }
         for (tracker in TrackerRegistry.all) {
             val host = hosts[tracker.id] ?: continue
             if (event.eventType and tracker.eventTypes == 0) continue
@@ -96,6 +109,8 @@ class TrackerAccessibilityService : AccessibilityService() {
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        // Saves unsaved screen time (on the app scope, which outlives this service).
+        if (::appSessions.isInitialized) appSessions.stop()
         if (::scope.isInitialized) scope.cancel()
         if (::overlay.isInitialized) overlay.removeAll()
         CounterNotification.cancel(this)

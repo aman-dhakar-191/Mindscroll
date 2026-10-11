@@ -10,6 +10,11 @@ of you, with **Mo** keeping you company:
   the other. Tap it to open a panel with Mo's take, per-app counts and the last 7 days. It's
   drawn by the accessibility service, which can draw above the status bar. A notification can't
   do that.
+- **Live timer:** while Instagram, YouTube or Facebook is open, the camera patch widens to show
+  a ticking timer for the current session in the app's color, next to Mo. It stops a few
+  seconds after you leave the app or the screen turns off, and picks up where it left off if
+  you're back within 10 seconds. That time is also saved as **screen time per app**: the home
+  screen, panel and notification show it next to each app's reel count.
 - **Floating bubble:** Mo with a count badge, which you can drag anywhere. Tap it for the same
   panel. Off by default.
 - **Home screen widget** with Mo, the count and Mo's line.
@@ -19,7 +24,12 @@ of you, with **Mo** keeping you company:
 Mo is a small blob who counts with you: cheeky, on your side, never preachy. Mo's mood (and
 color) follows today's count: **chill** (0–15), **curious** (16–40), **wobbly** (41–80),
 **dizzy** (81–150) and **running on fumes** (151+). Mo's lines change every few reels, with
-special ones at milestones and late at night. Moods and lines live in
+special ones at milestones and late at night. Mo is animated too: Mo blinks, plays a small
+idle loop for each mood (chill breathes, curious glances around, wobbly sways, dizzy's eyes spin,
+sleepy nods off with a floating "z"), and looks surprised each time a new reel counts. The
+always-on camera patch and bubble only animate the blinks and reactions, so they barely redraw;
+the panel and the app play the full idle loop. Timings are in
+[`MoMotion.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMotion.kt). Moods and lines live in
 [`Mo.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Mo.kt), and the drawing is in
 [`MoPainter.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoPainter.kt).
 
@@ -88,7 +98,7 @@ Daily totals, per-app breakdowns and multi-day series are all `SUM` queries in
 
 | Feature | Where it plugs in |
 | --- | --- |
-| Screen time per app | A `ScreenTimeTracker` (`id = "screen_time"`, `item_key` = package, `value` = ms) that reads `UsageStatsManager` from a periodic worker. It doesn't use accessibility events, so its `watchedPackages` stays empty. Needs the usage-access permission in onboarding. |
+| Screen time for every app | Done for Instagram, YouTube and Facebook: `ScreenTimeTracker` (`id = "screen_time"`, `item_key` = package, `value` = ms), recorded by the service's app session watcher. Covering every app means reading `UsageStatsManager` from a periodic worker under the same tracker id, which needs the usage-access permission in onboarding. |
 | Daily limits + gentle nudges | A `limit` table (`tracker_id`, `item_key`, `daily_limit`), added with a Room migration, plus a nudge component that collects `observeTodayTotal` / `observeTodayByItem` and posts a notification or briefly changes the camera patch color when a limit is crossed. The service already collects these flows for the displays. |
 | Weekly stats | `MetricsRepository.observeDailyTotals(trackerId, days)` already returns zero-filled day series. The home screen's 7-day chart uses it. `timestamp` is stored for hour-of-day breakdowns later. |
 

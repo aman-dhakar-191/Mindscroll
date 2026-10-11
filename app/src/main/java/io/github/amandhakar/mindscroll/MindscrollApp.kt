@@ -6,11 +6,17 @@ import io.github.amandhakar.mindscroll.data.MetricsRepository
 import io.github.amandhakar.mindscroll.data.MindscrollDatabase
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.display.CounterNotification
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 class MindscrollApp : Application() {
     val database by lazy { MindscrollDatabase.create(this) }
     val metrics by lazy { MetricsRepository(database.metricDao()) }
     val settings by lazy { Settings(this) }
+
+    /** For writes that must finish even if the component that started them is gone. */
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()

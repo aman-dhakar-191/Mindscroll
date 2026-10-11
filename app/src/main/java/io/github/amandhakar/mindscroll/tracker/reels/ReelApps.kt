@@ -12,6 +12,8 @@ data class ReelApp(
     val label: String,
     /** Short tag for the detection log. */
     val short: String,
+    /** The app's brand-ish color, ARGB, for its live timer in the camera patch. */
+    val accent: Long,
     val containerIds: Set<String> = emptySet(),
 )
 
@@ -21,18 +23,21 @@ object ReelApps {
             packageName = "com.instagram.android",
             label = "Instagram",
             short = "IG",
+            accent = 0xFFFF5C8A,
             containerIds = setOf("com.instagram.android:id/clips_viewer_view_pager"),
         ),
         ReelApp(
             packageName = "com.google.android.youtube",
             label = "YouTube Shorts",
             short = "YT",
+            accent = 0xFFFF4E45,
             containerIds = setOf("com.google.android.youtube:id/reel_recycler"),
         ),
         ReelApp(
             packageName = "com.facebook.katana",
             label = "Facebook",
             short = "FB",
+            accent = 0xFF4F9BFF,
         ),
     )
 

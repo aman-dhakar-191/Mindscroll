@@ -74,13 +74,30 @@ class ReelTracker(
         }
         val counted = detector.onScroll(sample)
         if (counted) host.record(app.packageName, 1)
-        DetectionLog.add(
-            "${app.short} scroll ${sample.viewId?.substringAfter(":id/") ?: source.className}" +
-                " pos ${sample.fromIndex}-${sample.toIndex}/${sample.itemCount}" +
-                " h ${sample.containerHeight}/${sample.tallestChildHeight}/${sample.screenHeight}" +
-                (if (sample.horizontal) " sideways" else "") +
-                " → ${if (counted) "COUNTED" else "skip"}: ${detector.lastReason}",
-        )
+        val line = "${app.short} scroll ${sample.viewId?.substringAfter(":id/") ?: source.className}" +
+            " pos ${sample.fromIndex}-${sample.toIndex}/${sample.itemCount}" +
+            " h ${sample.containerHeight}/${sample.tallestChildHeight}/${sample.screenHeight}" +
+            (if (sample.horizontal) " sideways" else "") +
+            " → ${if (counted) "COUNTED" else "skip"}: ${detector.lastReason}"
+        // Skips repeat dozens of times per gesture (e.g. scrolling comments); log the first of a
+        // run and how many followed, so they don't push everything else out of the log.
+        val skipKind = if (counted) null else "${app.short}|${sample.viewId}|${detector.lastReason.replace(digits, "#")}"
+        if (skipKind != null && skipKind == lastSkipKind) {
+            repeatedSkips++
+            return
+        }
+        flushRepeatedSkips()
+        lastSkipKind = skipKind
+        DetectionLog.add(line)
+    }
+
+    private var lastSkipKind: String? = null
+    private var repeatedSkips = 0
+    private val digits = Regex("\\d+")
+
+    private fun flushRepeatedSkips() {
+        if (repeatedSkips > 0) DetectionLog.add("   … and $repeatedSkips more like that")
+        repeatedSkips = 0
     }
 
     private fun checkScreen(app: ReelApp, time: Long, host: TrackerHost, force: Boolean) {
@@ -104,6 +121,8 @@ class ReelTracker(
         // Checks repeat often; log only changes and counts.
         if (opened || lastScreenResult[app.packageName] != result) {
             lastScreenResult[app.packageName] = result
+            flushRepeatedSkips()
+            lastSkipKind = null
             DetectionLog.add("${app.short} screen: $result → ${if (opened) "COUNTED" else "skip"}: ${detector.lastReason}")
         }
     }
