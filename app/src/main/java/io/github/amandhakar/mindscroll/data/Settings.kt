@@ -13,7 +13,12 @@ class Settings(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    data class Display(val cameraPatch: Boolean, val bubble: Boolean)
+    data class Display(
+        val cameraPatch: Boolean,
+        val bubble: Boolean,
+        /** Show the camera patch only while a tracked app is in use, out of other apps' way. */
+        val patchOnlyInApps: Boolean = true,
+    )
 
     var onboardingDone: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
@@ -26,6 +31,10 @@ class Settings(context: Context) {
     var bubble: Boolean
         get() = prefs.getBoolean(KEY_BUBBLE, false)
         set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
+
+    var patchOnlyInApps: Boolean
+        get() = prefs.getBoolean(KEY_PATCH_ONLY_IN_APPS, true)
+        set(value) = prefs.edit().putBoolean(KEY_PATCH_ONLY_IN_APPS, value).apply()
 
     /** Where the floating bubble was last dragged to, in px from the top-left. */
     var bubblePosition: Pair<Int, Int>
@@ -46,11 +55,11 @@ class Settings(context: Context) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.conflate()
 
-    fun display() = Display(cameraPatch, bubble)
+    fun display() = Display(cameraPatch, bubble, patchOnlyInApps)
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE) trySend(display())
+            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_PATCH_ONLY_IN_APPS) trySend(display())
         }
         trySend(display())
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -61,6 +70,7 @@ class Settings(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_CAMERA_PATCH = "camera_patch"
         const val KEY_BUBBLE = "bubble"
+        const val KEY_PATCH_ONLY_IN_APPS = "patch_only_in_apps"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"

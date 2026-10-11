@@ -247,12 +247,28 @@ private fun DisplayCard() {
     val settings = LocalContext.current.app.settings
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
+    var onlyInApps by remember { mutableStateOf(settings.patchOnlyInApps) }
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("On screen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ToggleRow("Camera patch", "Mo and today's count around the front camera. Tap it for details.", cameraPatch) {
+            ToggleRow(
+                "Camera patch",
+                "Mo and today's count around the front camera. Tap for details, long-press to hide for an hour.",
+                cameraPatch,
+            ) {
                 cameraPatch = it
                 settings.cameraPatch = it
+            }
+            if (cameraPatch) {
+                ToggleRow(
+                    "Only while using tracked apps",
+                    "Keeps the space around the camera free for calls, timers and other apps. " +
+                        "It always steps aside during calls.",
+                    onlyInApps,
+                ) {
+                    onlyInApps = it
+                    settings.patchOnlyInApps = it
+                }
             }
             ToggleRow("Floating bubble", "Mo with a count badge. Drag it anywhere, tap for details.", bubble) {
                 bubble = it
