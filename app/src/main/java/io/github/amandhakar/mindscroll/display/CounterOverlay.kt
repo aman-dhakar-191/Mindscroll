@@ -23,12 +23,15 @@ import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.widget.Chronometer
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
+import io.github.amandhakar.mindscroll.service.AppSession
+import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import io.github.amandhakar.mindscroll.ui.MainActivity
 import kotlin.math.abs
 
@@ -58,7 +61,18 @@ class CounterOverlay(
     private var state: CounterState? = null
     private var display = Settings.Display(cameraPatch = false, bubble = false)
 
-    private class PatchViews(val root: View, val mo: MoView, val count: TextView, val bottomY: Int)
+    private var session: AppSession? = null
+
+    private class PatchViews(
+        val root: LinearLayout,
+        val left: LinearLayout,
+        val mo: MoView,
+        val timer: Chronometer,
+        val count: TextView,
+        val params: WindowManager.LayoutParams,
+        val camera: Rect?,
+        val bottomY: Int,
+    )
     private class BubbleViews(val root: View, val mo: MoView, val count: TextView)
 
     fun show(newState: CounterState, newDisplay: Settings.Display) {
@@ -111,9 +125,23 @@ class CounterOverlay(
     private fun addPatch(): PatchViews? {
         val camera = topCutout()
         val height = maxOf((camera?.height() ?: 0) + dp(8), dp(30))
-        val slot = dp(30)
 
         val mo = MoView(service)
+        val timer = Chronometer(service).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            gravity = Gravity.CENTER_VERTICAL
+            maxLines = 1
+            visibility = View.GONE
+        }
+        val left = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(mo, LinearLayout.LayoutParams(dp(22), dp(22)))
+            addView(timer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                marginStart = dp(4)
+            })
+        }
         val count = TextView(service).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -128,38 +156,93 @@ class CounterOverlay(
                 setColor(Color.BLACK)
                 cornerRadius = height / 2f
             }
-            setPadding(dp(8), 0, dp(8), 0)
-            addView(mo, LinearLayout.LayoutParams(slot, dp(22)))
-            // With a camera hole, Mo and the count sit either side of it, island style.
-            val gap = if (camera != null) camera.width() + dp(10) else dp(6)
-            addView(View(service), LinearLayout.LayoutParams(gap, 1))
-            addView(count, LinearLayout.LayoutParams(slot + dp(6), LinearLayout.LayoutParams.MATCH_PARENT))
+            setPadding(dp(PATCH_PADDING_DP), 0, dp(PATCH_PADDING_DP), 0)
+            // With a camera hole, the two sides sit either side of it, island style.
+            addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
+            addView(View(service), LinearLayout.LayoutParams(cameraGap(camera), 1))
+            addView(count, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
             contentDescription = "Mindscroll: today's reels. Tap for details."
             setOnClickListener { togglePanel() }
         }
 
-        val width = dp(16) + slot + (if (camera != null) camera.width() + dp(10) else dp(6)) + slot + dp(6)
         val params = overlayParams(touchable = true).apply {
-            this.width = width
             this.height = height
             gravity = Gravity.TOP or Gravity.START
-            if (camera != null) {
-                x = maxOf(0, camera.centerX() - width / 2)
-                y = maxOf(0, camera.centerY() - height / 2)
-            } else {
-                x = (screenWidth() - width) / 2
-                y = dp(4)
+            y = if (camera != null) maxOf(0, camera.centerY() - height / 2) else dp(4)
+        }
+        val views = PatchViews(pill, left, mo, timer, count, params, camera, bottomY = params.y + height)
+        bindSession(views)
+        // A longer time (59:59 → 1:00:00) needs a wider island.
+        var lastLength = 0
+        timer.setOnChronometerTickListener {
+            if (it.text.length != lastLength) {
+                lastLength = it.text.length
+                layoutPatch(views, apply = true)
             }
         }
+        layoutPatch(views, apply = false)
         if (!add(pill, params)) return null
         pill.alpha = 0f
         pill.scaleX = 0.6f
         pill.animate().alpha(1f).scaleX(1f).setDuration(250).setInterpolator(DecelerateInterpolator()).start()
-        return PatchViews(pill, mo, count, bottomY = params.y + height)
+        return views
     }
 
+    /** The app in use right now, or null. Shows or hides the live timer in the patch. */
+    fun setSession(newSession: AppSession?) {
+        if (newSession == session) return
+        session = newSession
+        patch?.let {
+            bindSession(it)
+            layoutPatch(it, apply = true)
+        }
+    }
+
+    private fun bindSession(views: PatchViews) {
+        val current = session
+        if (current == null) {
+            views.timer.stop()
+            views.timer.visibility = View.GONE
+            views.root.contentDescription = "Mindscroll: today's reels. Tap for details."
+            return
+        }
+        val app = ReelApps.byPackage[current.packageName]
+        views.timer.base = current.startedAt
+        views.timer.setTextColor(app?.accent?.toInt() ?: Color.WHITE)
+        views.timer.visibility = View.VISIBLE
+        views.timer.start()
+        views.root.contentDescription = "Mindscroll: time in ${app?.label ?: "this app"} and today's reels. Tap for details."
+    }
+
+    /**
+     * Sizes the patch so both sides of the camera are equally wide, keeping the camera hole
+     * centered in it, with room for the timer when it's showing.
+     */
+    private fun layoutPatch(views: PatchViews, apply: Boolean) {
+        val timerWidth = if (views.timer.visibility == View.VISIBLE) {
+            views.timer.paint.measureText(views.timer.text.toString()).toInt() + dp(6)
+        } else {
+            0
+        }
+        val side = dp(30) + timerWidth
+        (views.left.layoutParams as LinearLayout.LayoutParams).width = side
+        (views.count.layoutParams as LinearLayout.LayoutParams).width = side
+        val width = 2 * dp(PATCH_PADDING_DP) + 2 * side + cameraGap(views.camera)
+        views.params.width = width
+        views.params.x = maxOf(0, (views.camera?.centerX() ?: (screenWidth() / 2)) - width / 2)
+        if (apply) {
+            views.left.requestLayout()
+            runCatching { windowManager.updateViewLayout(views.root, views.params) }
+        }
+    }
+
+    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(10) else dp(6)
+
     private fun removePatch() {
-        patch?.let { remove(it.root) }
+        patch?.let {
+            it.timer.stop()
+            remove(it.root)
+        }
         patch = null
     }
 
@@ -355,6 +438,7 @@ class CounterOverlay(
 
     private companion object {
         const val PANEL_TIMEOUT_MS = 10_000L
+        const val PATCH_PADDING_DP = 8
     }
 }
 

@@ -10,6 +10,10 @@ of you, with **Mo** keeping you company:
   the other. Tap it to open a panel with Mo's take, per-app counts and the last 7 days. It's
   drawn by the accessibility service, which can draw above the status bar. A notification can't
   do that.
+- **Live timer:** while Instagram, YouTube or Facebook is open, the camera patch widens to show
+  a ticking timer for the current session in the app's color, next to Mo. It stops a few
+  seconds after you leave the app or the screen turns off, and picks up where it left off if
+  you're back within 10 seconds.
 - **Floating bubble:** Mo with a count badge, which you can drag anywhere. Tap it for the same
   panel. Off by default.
 - **Home screen widget** with Mo, the count and Mo's line.

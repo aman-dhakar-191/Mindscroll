@@ -35,12 +35,14 @@ class TrackerAccessibilityService : AccessibilityService() {
 
     private lateinit var scope: CoroutineScope
     private lateinit var overlay: CounterOverlay
+    private lateinit var appSessions: AppSessionWatcher
     private val hosts = mutableMapOf<String, TrackerHost>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
+        appSessions = AppSessionWatcher(this, TrackerRegistry.watchedPackages()?.toSet().orEmpty())
 
         // Listen only to what the registered trackers need.
         serviceInfo = serviceInfo.apply {
@@ -78,9 +80,14 @@ class TrackerAccessibilityService : AccessibilityService() {
                 CounterWidget.update(this@TrackerAccessibilityService, state.total)
             }
         }
+        // Live timer in the camera patch while a watched app is in use.
+        scope.launch {
+            appSessions.session.collect { overlay.setSession(it) }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (::appSessions.isInitialized) event.packageName?.let { appSessions.onAppEvent(it.toString()) }
         for (tracker in TrackerRegistry.all) {
             val host = hosts[tracker.id] ?: continue
             if (event.eventType and tracker.eventTypes == 0) continue
@@ -97,6 +104,7 @@ class TrackerAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         if (::scope.isInitialized) scope.cancel()
+        if (::appSessions.isInitialized) appSessions.stop()
         if (::overlay.isInitialized) overlay.removeAll()
         CounterNotification.cancel(this)
         super.onDestroy()
