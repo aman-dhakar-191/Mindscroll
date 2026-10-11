@@ -24,13 +24,17 @@ class MainActivity : ComponentActivity() {
                 val settings = context.app.settings
                 var permissions by remember { mutableStateOf(PermissionState.read(context)) }
                 var onboarding by remember { mutableStateOf(!settings.onboardingDone) }
+                var showLog by remember { mutableStateOf(false) }
 
                 // Permissions are granted in system screens; re-read them on the way back.
                 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
                     permissions = PermissionState.read(context)
                 }
 
-                if (onboarding) {
+                if (showLog) {
+                    BackHandler { showLog = false }
+                    DetectionLogScreen(onBack = { showLog = false })
+                } else if (onboarding) {
                     // Opened again from the home screen: back returns there.
                     BackHandler(enabled = settings.onboardingDone) { onboarding = false }
                     OnboardingScreen(
@@ -45,6 +49,7 @@ class MainActivity : ComponentActivity() {
                     HomeScreen(
                         permissions = permissions,
                         onOpenSetup = { onboarding = true },
+                        onOpenLog = { showLog = true },
                     )
                 }
             }

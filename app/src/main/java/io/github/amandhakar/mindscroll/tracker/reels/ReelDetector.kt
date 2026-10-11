@@ -52,6 +52,10 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
 
     private val visits = mutableMapOf<String, Visit>()
 
+    /** Why the last [onScreen] or [onScroll] call decided what it did, for the detection log. */
+    var lastReason: String = ""
+        private set
+
     /** Any event from [packageName]. Long silences mean the user left the app. */
     fun onAppActivity(packageName: String, timeMs: Long) {
         val visit = visits[packageName] ?: return
@@ -66,31 +70,34 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
      * app says which. Returns true if a feed was just opened, which counts its first reel.
      */
     fun onScreen(packageName: String, timeMs: Long, feedShowing: Boolean, index: Int? = null): Boolean {
-        if (packageName !in apps) return false
+        if (packageName !in apps) return no("not a reel app")
         onAppActivity(packageName, timeMs)
         val visit = visits[packageName]
         if (!feedShowing) {
             if (visit != null && visit.goneAt == null) visit.goneAt = timeMs
-            return false
+            return no("no feed on screen")
         }
         if (visit != null) {
             val goneFor = visit.goneAt?.let { timeMs - it }
-            val briefly = goneFor == null || goneFor < REOPEN_GAP_MS
-            // Back on the exact reel they left (e.g. the screen was off): not a new one.
-            val sameReel = index != null && index == visit.furthestIndex
-            if (briefly || sameReel) {
+            if (goneFor == null) return no("feed still showing")
+            if (goneFor < REOPEN_GAP_MS) {
                 visit.goneAt = null
-                return false
+                return no("feed back after ${goneFor}ms (sheet or dialog)")
+            }
+            // Back on the exact reel they left (e.g. the screen was off): not a new one.
+            if (index != null && index == visit.furthestIndex) {
+                visit.goneAt = null
+                return no("back on the same reel #$index")
             }
         }
         visits[packageName] = Visit(furthestIndex = index ?: -1, openedAt = timeMs, lastActivityAt = timeMs)
-        return true
+        return yes("feed opened")
     }
 
     /** True if [sample] means the user is now on a reel they hadn't reached before. */
     fun onScroll(sample: ScrollSample): Boolean {
-        val app = apps[sample.packageName] ?: return false
-        if (!isReelFeed(app, sample)) return false
+        val app = apps[sample.packageName] ?: return no("not a reel app")
+        if (!isReelFeed(app, sample)) return no("not a reel feed")
 
         val time = sample.timeMs
         onAppActivity(sample.packageName, time)
@@ -104,14 +111,14 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
         }
         if (visit == null) {
             // Scrolling in a feed no screen check has seen: the reel it lands on is new.
-            if (hasPositions && !settled) return false
+            if (hasPositions && !settled) return no("new visit, mid-swipe")
             visits[sample.packageName] = Visit(
                 furthestIndex = if (hasPositions) sample.fromIndex else -1,
                 openedAt = time,
                 lastActivityAt = time,
                 lastScrollAt = time,
             )
-            return true
+            return yes("new visit by scrolling")
         }
 
         val sinceLastScroll = time - visit.lastScrollAt
@@ -120,31 +127,45 @@ class ReelDetector(private val apps: Map<String, ReelApp> = ReelApps.byPackage) 
         val justOpened = time - visit.openedAt < OPEN_SETTLE_MS
 
         if (!hasPositions) {
+            if (justOpened) return no("layout right after opening")
             // One count per gesture: scroll events keep coming while a swipe animates.
-            return !justOpened && sinceLastScroll > GESTURE_GAP_MS
+            return if (sinceLastScroll > GESTURE_GAP_MS) yes("new swipe") else no("same swipe (${sinceLastScroll}ms)")
         }
 
-        if (!settled) return false
+        if (!settled) return no("mid-swipe")
         val index = sample.fromIndex
         return when {
             // Opened without knowing the position: learn it. Right after opening it's still
             // the opening reel; later it's one the user swiped to.
             visit.furthestIndex < 0 -> {
                 visit.furthestIndex = index
-                !justOpened
+                if (justOpened) no("learned position #$index") else yes("swiped to #$index")
             }
             index > visit.furthestIndex -> {
                 visit.furthestIndex = index
-                true
+                yes("new reel #$index")
             }
             // Feed rebuilt from the top (pull to refresh, tab tapped again): a fresh reel.
             index == 0 && visit.furthestIndex > 0 -> {
                 visit.furthestIndex = 0
-                true
+                yes("feed restarted at #0")
             }
-            else -> false
+            else -> no("already seen #$index (furthest #${visit.furthestIndex})")
         }
     }
+
+    private fun yes(reason: String): Boolean {
+        lastReason = reason
+        return true
+    }
+
+    private fun no(reason: String): Boolean {
+        lastReason = reason
+        return false
+    }
+
+    /** Whether [sample] scrolled a reel feed (by known id or by shape). */
+    fun isReelFeed(sample: ScrollSample): Boolean = apps[sample.packageName]?.let { isReelFeed(it, sample) } ?: false
 
     private fun isReelFeed(app: ReelApp, sample: ScrollSample): Boolean {
         if (sample.viewId != null && sample.viewId in app.containerIds) return true

@@ -237,4 +237,17 @@ class ReelDetectorTest {
         )
         assertEquals(4, counted)
     }
+
+    @Test
+    fun decisionsCarryAReasonForTheLog() {
+        val d = ReelDetector()
+        d.onScroll(sample(time = 0, from = 3))
+        assertEquals("new visit by scrolling", d.lastReason)
+        d.onScroll(sample(time = 1000, from = 3, to = 4))
+        assertEquals("mid-swipe", d.lastReason)
+        d.onScroll(sample(time = 2000, from = 2))
+        assertEquals("already seen #2 (furthest #3)", d.lastReason)
+        d.onScroll(sample(pkg = facebook, viewId = null, time = 0, childHeight = 700))
+        assertEquals("not a reel feed", d.lastReason)
+    }
 }
