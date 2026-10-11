@@ -70,7 +70,7 @@ class FatigueTest {
     @Test
     fun restedMoSaysSoInsteadOfAMilestone() {
         val line = Mo.line(100, 14, Mood.CHILL, rested = true)
-        assertFalse(line.startsWith("100 reels"))
+        assertTrue(line != Mo.line(100, 14))
         assertFalse("{n}" in line)
     }
 

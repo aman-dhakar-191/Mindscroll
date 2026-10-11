@@ -22,23 +22,34 @@ of you, with **Mo** keeping you company:
 
 ## Meet Mo
 
-Mo is a small blob who counts with you: cheeky, on your side, never preachy. Mo's mood (and
-color) follows how worn out Mo is: **chill**, **curious**, **wobbly**, **dizzy** and
-**running on fumes**. Every reel adds to it, and it halves every 20 minutes you aren't watching
-reels, so a binge frazzles Mo and putting the phone down calms Mo back down. An hour's break
-takes Mo from dizzy to chill, and Mo will thank you for it. The thresholds match reel counts
-(16, 41, 81, 151), and the model is in
-[`Fatigue.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Fatigue.kt). Mo's lines change every few reels, with
-special ones at milestones and late at night. Mo is animated too: Mo blinks, plays a small
-idle loop for each mood (chill breathes, curious glances around, wobbly sways, dizzy's eyes spin,
-sleepy nods off with a floating "z"), and looks surprised each time a new reel counts. The
-always-on camera patch and bubble only animate the blinks and reactions, so they barely redraw;
-the panel and the app play the full idle loop. Timings are in
-[`MoMotion.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMotion.kt). Moods and lines live in
-[`Mo.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Mo.kt), and the drawing is in
-[`MoPainter.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoPainter.kt).
+Mo is a small, soft blob who lives in the hole your front camera sits in ("a studio
+apartment, great view of your face"). Mo sees every reel you see, through the same glass, so a
+binge makes Mo dizzy and a break lets Mo recover. Mo can't stop you scrolling and doesn't try:
+Mo keeps count and keeps you company. Warm, a bit dramatic, gently cheeky, never preachy.
+The character bible and every line Mo says live in
+[`Mo.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Mo.kt).
 
-Everything stays on the phone. The app has no internet permission.
+- **Moods.** Mo's mood (and color) follows how worn out Mo is: **chill**, **curious**,
+  **wobbly**, **dizzy** and **running on fumes**. Every reel adds to it, and it halves every
+  20 minutes you aren't watching reels ([`Fatigue.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Fatigue.kt)).
+  After a good break Mo thanks you for it.
+- **Speaks up.** A speech bubble pops out under the camera patch at real moments: a fast run
+  of swipes, milestones, getting more frazzled, every fifth trip to an app, coming back after a
+  break, waking up, and a memory of yesterday at the day's first open. At most one remark every
+  3 minutes (45 s for big moments) and 10 an hour; tap a bubble to dismiss it
+  ([`MoMoments.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMoments.kt)).
+- **Sleeps and wakes.** Mo dozes off 15 minutes after the last reel and whenever the screen is
+  off: eyes shut, slow breaths, a floating "z" (in the patch, bubble, widget and notification).
+  Mo wakes with a stretch and a big yawn when you're back, and after a long sleep says so
+  ([`MoSleep.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoSleep.kt)).
+- **Remembers you.** On the home screen Mo greets you by time of day and remembers: today vs
+  yesterday at the same time, calm-day streaks, the hour you scroll most, and the app you
+  scroll in most this week ([`MoMemory.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMemory.kt)).
+- **Animated.** Mo blinks, plays an idle loop per mood (chill breathes, curious glances
+  around, wobbly sways, dizzy's eyes spin, sleepy nods off) and looks surprised when a reel
+  counts. The always-on patch and bubble only animate blinks, reactions and waking, so they
+  barely redraw; the panel and the app play the full loop
+  ([`MoMotion.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMotion.kt)).
 
 ## Install
 

@@ -33,6 +33,8 @@ data class CounterState(
     val week: List<DayTotal>,
     /** How Mo feels: climbs with reels, calms down during breaks (see Fatigue). */
     val mood: Mood = Mood.forCount(total),
+    /** Mo has dozed off (you've been away from reels, or the screen was off). */
+    val asleep: Boolean = false,
 ) {
     /** Mo has calmed down from a break. */
     val rested: Boolean get() = Mo.isRested(total, mood)

@@ -35,7 +35,11 @@ object MoPainter {
         val s = size
         val body = mood.color.toInt()
         val wave = sin(pose.phase * 2 * PI).toFloat()
-        val surprised = pose.react > 0.35f
+        val asleep = pose.sleep > 0.5f
+        val yawning = !asleep && pose.yawn > 0.25f
+        val surprised = !asleep && !yawning && pose.react > 0.35f
+        // Eyelids still heavy while waking up.
+        val blink = maxOf(pose.blink, pose.sleep)
 
         canvas.save()
         canvas.translate(left, top)
@@ -43,14 +47,20 @@ object MoPainter {
         // Whole-body motion, pivoting on the bottom middle.
         val pivotX = s * 0.5f
         val pivotY = s * 0.94f
-        when (mood) {
-            Mood.CHILL -> canvas.scale(1 + 0.025f * wave, 1 - 0.025f * wave, pivotX, pivotY) // breathing
-            Mood.WOBBLY -> canvas.rotate(6f * wave, pivotX, pivotY) // swaying
-            Mood.SLEEPY -> canvas.rotate(3f * wave, pivotX, pivotY) // nodding off
-            else -> Unit
+        when {
+            // Asleep: slow, deep breaths whatever the mood.
+            asleep -> canvas.scale(1 + 0.04f * wave, 1 - 0.04f * wave, pivotX, pivotY)
+            // Waking: a big stretch, tall and thin.
+            pose.yawn > 0f -> canvas.scale(1 - 0.06f * pose.yawn, 1 + 0.1f * pose.yawn, pivotX, pivotY)
+            else -> when (mood) {
+                Mood.CHILL -> canvas.scale(1 + 0.025f * wave, 1 - 0.025f * wave, pivotX, pivotY) // breathing
+                Mood.WOBBLY -> canvas.rotate(6f * wave, pivotX, pivotY) // swaying
+                Mood.SLEEPY -> canvas.rotate(3f * wave, pivotX, pivotY) // nodding off
+                else -> Unit
+            }
         }
         // Surprise: squash down and spread out, like landing a hop.
-        canvas.scale(1 + 0.1f * pose.react, 1 - 0.14f * pose.react, pivotX, pivotY)
+        if (surprised) canvas.scale(1 + 0.1f * pose.react, 1 - 0.14f * pose.react, pivotX, pivotY)
 
         // The curl on top: a little scroll, as in "scroll". It perks up on surprise.
         stroke.color = body
@@ -75,24 +85,34 @@ object MoPainter {
         val eyeY = s * 0.52f
         val eyes = floatArrayOf(s * 0.35f, s * 0.65f)
 
-        if (mood == Mood.CHILL || mood == Mood.CURIOUS || surprised) {
+        if (!asleep && (mood == Mood.CHILL || mood == Mood.CURIOUS || surprised)) {
             fill.color = Color.argb(90, 255, 110, 140)
             rect.set(s * 0.15f, s * 0.6f, s * 0.29f, s * 0.69f); canvas.drawOval(rect, fill)
             rect.set(s * 0.71f, s * 0.6f, s * 0.85f, s * 0.69f); canvas.drawOval(rect, fill)
             fill.color = INK
         }
 
-        if (surprised) {
-            eyes.forEach { x -> wideEye(canvas, x, eyeY, s * 0.09f, pose.blink) }
+        if (asleep) {
+            eyes.forEach { x -> // peacefully shut: ‿
+                rect.set(x - s * 0.07f, eyeY - s * 0.06f, x + s * 0.07f, eyeY + s * 0.04f)
+                canvas.drawArc(rect, 20f, 140f, false, stroke)
+            }
+        } else if (yawning) {
+            eyes.forEach { x -> // squeezed shut mid-yawn: ∩
+                rect.set(x - s * 0.07f, eyeY - s * 0.04f, x + s * 0.07f, eyeY + s * 0.08f)
+                canvas.drawArc(rect, 200f, 140f, false, stroke)
+            }
+        } else if (surprised) {
+            eyes.forEach { x -> wideEye(canvas, x, eyeY, s * 0.09f, blink) }
         } else when (mood) {
             Mood.CHILL -> eyes.forEach { x -> // happy closed eyes: ∩
                 rect.set(x - s * 0.07f, eyeY - s * 0.05f, x + s * 0.07f, eyeY + s * 0.07f)
                 canvas.drawArc(rect, 200f, 140f, false, stroke)
             }
             // Glancing left and right.
-            Mood.CURIOUS -> eyes.forEach { x -> dotEye(canvas, x + s * 0.025f * wave, eyeY, s * 0.065f, pose.blink) }
+            Mood.CURIOUS -> eyes.forEach { x -> dotEye(canvas, x + s * 0.025f * wave, eyeY, s * 0.065f, blink) }
             Mood.WOBBLY -> eyes.forEachIndexed { i, x ->
-                dotEye(canvas, x, eyeY + s * 0.01f, s * 0.055f, pose.blink)
+                dotEye(canvas, x, eyeY + s * 0.01f, s * 0.055f, blink)
                 // Worried brows, tilted up toward the middle, twitching with the sway.
                 val inner = if (i == 0) 1 else -1
                 val lift = s * 0.01f * wave
@@ -118,7 +138,15 @@ object MoPainter {
         }
 
         val mouthY = s * 0.72f
-        if (surprised) {
+        if (asleep) {
+            // A small, slightly open sleeping mouth.
+            rect.set(s * 0.46f, mouthY - s * 0.02f, s * 0.54f, mouthY + s * 0.04f)
+            canvas.drawOval(rect, fill)
+        } else if (yawning) {
+            val open = s * (0.04f + 0.08f * pose.yawn)
+            rect.set(s * 0.5f - open * 0.7f, mouthY - open * 0.8f, s * 0.5f + open * 0.7f, mouthY + open)
+            canvas.drawOval(rect, fill)
+        } else if (surprised) {
             val open = s * (0.04f + 0.03f * pose.react)
             rect.set(s * 0.5f - open * 0.8f, mouthY - open, s * 0.5f + open * 0.8f, mouthY + open)
             canvas.drawOval(rect, fill)
@@ -142,8 +170,8 @@ object MoPainter {
         }
         canvas.restore()
 
-        // Sleepy's "z" floats up and fades, outside the body's sway.
-        if (mood == Mood.SLEEPY && !surprised) {
+        // A "z" floats up and fades, outside the body's sway: running on fumes, or asleep.
+        if (asleep || (mood == Mood.SLEEPY && !surprised && !yawning)) {
             canvas.save()
             canvas.translate(left, top - s * 0.08f * pose.phase)
             stroke.color = body
@@ -159,9 +187,9 @@ object MoPainter {
     }
 
     /** A still Mo, for the widget and notification (they can't animate). */
-    fun bitmap(sizePx: Int, mood: Mood): Bitmap {
+    fun bitmap(sizePx: Int, mood: Mood, asleep: Boolean = false): Bitmap {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-        draw(Canvas(bitmap), sizePx.toFloat(), mood)
+        draw(Canvas(bitmap), sizePx.toFloat(), mood, pose = MoPose(sleep = if (asleep) 1f else 0f))
         return bitmap
     }
 
@@ -245,8 +273,19 @@ class MoView @JvmOverloads constructor(
             invalidate()
         }
 
+    /** Mo is asleep: eyes shut, a "z". Use [wakeUp] to wake Mo with a stretch and a yawn. */
+    var asleep: Boolean = false
+        set(value) {
+            if (field != value) {
+                field = value
+                if (value) wakeStart = null
+                invalidate()
+            }
+        }
+
     private var blinkStart: Long? = null
     private var reactStart: Long? = null
+    private var wakeStart: Long? = null
 
     private val blinker = object : Runnable {
         override fun run() {
@@ -259,6 +298,14 @@ class MoView @JvmOverloads constructor(
     /** A new reel counted: Mo looks surprised for a moment. */
     fun react() {
         reactStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    /** Wakes Mo up, if asleep: eyes open slowly through a big yawn and a stretch. */
+    fun wakeUp() {
+        if (!asleep) return
+        asleep = false
+        wakeStart = SystemClock.uptimeMillis()
         invalidate()
     }
 
@@ -275,13 +322,14 @@ class MoView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         val now = SystemClock.uptimeMillis()
         val size = minOf(width, height).toFloat()
-        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion)
+        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart)
         MoPainter.draw(canvas, size, mood, (width - size) / 2, (height - size) / 2, pose)
 
         val blinking = blinkStart?.let { now - it < MoMotion.BLINK_MS } ?: false
         val reacting = reactStart?.let { now - it < MoMotion.REACT_MS } ?: false
+        val waking = wakeStart?.let { now - it < MoMotion.WAKE_MS } ?: false
         when {
-            blinking || reacting -> postInvalidateOnAnimation()
+            blinking || reacting || waking -> postInvalidateOnAnimation()
             idleMotion -> postInvalidateDelayed(IDLE_FRAME_MS)
         }
     }

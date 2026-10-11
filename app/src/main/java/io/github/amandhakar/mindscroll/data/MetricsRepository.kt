@@ -1,7 +1,11 @@
 package io.github.amandhakar.mindscroll.data
 
 import io.github.amandhakar.mindscroll.mascot.Fatigue
+import io.github.amandhakar.mindscroll.mascot.MemoryFacts
 import io.github.amandhakar.mindscroll.mascot.Mood
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -64,10 +68,53 @@ class MetricsRepository(private val dao: MetricDao) {
         return Mood.forLevel(Fatigue.level(dao.timesSince(trackerId, now - Fatigue.WINDOW_MS), now))
     }
 
+    /**
+     * What Mo remembers about recent days for [trackerId]: today vs yesterday at this time,
+     * the run of calm days, the busiest hour and the favourite app over the last week.
+     * [label] names an item (an app package).
+     */
+    suspend fun memoryFacts(trackerId: String, label: (String) -> String): MemoryFacts {
+        val now = System.currentTimeMillis()
+        val zone = ZoneId.systemDefault()
+        val today = Days.today()
+        val firstDay = dao.firstDay(trackerId)
+        val yesterday = today - 1
+        val hasYesterday = firstDay != null && firstDay <= yesterday
+        val startOfYesterday = LocalDate.ofEpochDay(yesterday).atStartOfDay(zone).toInstant().toEpochMilli()
+
+        val from = maxOf(firstDay ?: today, today - MEMORY_DAYS)
+        val byDay = dao.dailyTotals(trackerId, from, yesterday).associate { it.day to it.total }
+        val weekTimes = dao.timesSince(trackerId, now - MEMORY_DAYS * DAY_MS)
+        val peakHour = weekTimes.takeIf { it.size >= MIN_FOR_PATTERNS }
+            ?.groupingBy { Instant.ofEpochMilli(it).atZone(zone).hour }
+            ?.eachCount()
+            ?.maxByOrNull { it.value }
+            ?.key
+        val favourite = dao.totalsByItemBetween(trackerId, today - MEMORY_DAYS, today).firstOrNull()
+            ?.takeIf { it.total >= MIN_FOR_FAVOURITE }
+
+        return MemoryFacts(
+            today = dao.dayTotal(trackerId, today),
+            yesterdaySoFar = if (hasYesterday) dao.countBetween(trackerId, startOfYesterday, now - DAY_MS) else null,
+            yesterdayTotal = if (hasYesterday) byDay[yesterday] ?: 0L else null,
+            pastDays = (from..yesterday).map { byDay[it] ?: 0L },
+            peakHour = peakHour,
+            favouriteApp = favourite?.let { label(it.itemKey) },
+        )
+    }
+
     private fun minuteTicks(): Flow<Unit> = flow {
         while (true) {
             emit(Unit)
             delay(60_000)
         }
+    }
+
+    private companion object {
+        const val DAY_MS = 24 * 60 * 60_000L
+        const val MEMORY_DAYS = 7L
+        /** Patterns need some data before they mean anything. */
+        const val MIN_FOR_PATTERNS = 30
+        const val MIN_FOR_FAVOURITE = 10L
     }
 }

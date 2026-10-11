@@ -36,7 +36,7 @@ class CounterWidget : AppWidgetProvider() {
             val mood = state.mood
             val moSize = (56 * context.resources.displayMetrics.density).toInt()
             val views = RemoteViews(context.packageName, R.layout.widget_counter).apply {
-                setImageViewBitmap(R.id.widget_mo, MoPainter.bitmap(moSize, mood))
+                setImageViewBitmap(R.id.widget_mo, MoPainter.bitmap(moSize, mood, state.asleep))
                 setTextViewText(R.id.widget_count, total.toString())
                 setTextViewText(R.id.widget_label, "${TrackerRegistry.primary.title.lowercase()} today")
                 setTextColor(R.id.widget_label, mood.color.toInt())
