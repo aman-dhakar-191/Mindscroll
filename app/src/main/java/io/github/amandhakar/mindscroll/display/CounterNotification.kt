@@ -17,7 +17,9 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.provider.Settings
 import io.github.amandhakar.mindscroll.R
-import io.github.amandhakar.mindscroll.data.ItemTotal
+import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoPainter
+import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import io.github.amandhakar.mindscroll.ui.MainActivity
 
@@ -46,14 +48,18 @@ object CounterNotification {
         )
     }
 
-    fun show(context: Context, total: Long, byItem: List<ItemTotal>) {
+    fun show(context: Context, state: CounterState) {
         if (!canNotify(context)) return
         val tracker = TrackerRegistry.primary
-        val breakdown = byItem.joinToString("  ·  ") { "${tracker.itemLabel(it.itemKey)} ${it.total}" }
+        val breakdown = state.byItem.joinToString("  ·  ") { (label, count) -> "$label $count" }
+        val line = state.line()
         val notification = Notification.Builder(context, CHANNEL_COUNTER)
-            .setSmallIcon(countIcon(context, total))
-            .setContentTitle("$total ${tracker.title.lowercase()} today")
-            .setContentText(breakdown.ifEmpty { "Nothing yet today" })
+            .setSmallIcon(countIcon(context, state.total))
+            .setLargeIcon(moIcon(context, state))
+            .setContentTitle("${state.total} ${tracker.title.lowercase()} today · ${Mo.NAME} is ${state.mood.title.lowercase()}")
+            .setContentText(line)
+            .setStyle(Notification.BigTextStyle().bigText(if (breakdown.isEmpty()) line else "$line\n$breakdown"))
+            .setColor(state.mood.color.toInt())
             .setContentIntent(openApp(context))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -63,6 +69,14 @@ object CounterNotification {
             .build()
         context.getSystemService(NotificationManager::class.java).notify(ID_COUNTER, notification)
         context.getSystemService(NotificationManager::class.java).cancel(ID_OFF)
+    }
+
+    private var moIconCache: Pair<Mood, Icon>? = null
+
+    private fun moIcon(context: Context, state: CounterState): Icon {
+        moIconCache?.let { (mood, icon) -> if (mood == state.mood) return icon }
+        val size = (64 * context.resources.displayMetrics.density).toInt()
+        return Icon.createWithBitmap(MoPainter.bitmap(size, state.mood)).also { moIconCache = state.mood to it }
     }
 
     fun cancel(context: Context) {
