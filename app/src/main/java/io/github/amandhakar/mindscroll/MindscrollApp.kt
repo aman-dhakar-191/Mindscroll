@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import io.github.amandhakar.mindscroll.data.MetricsRepository
 import io.github.amandhakar.mindscroll.data.MindscrollDatabase
+import io.github.amandhakar.mindscroll.data.MoMemoryStore
+import io.github.amandhakar.mindscroll.data.MoPrefs
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.display.CounterNotification
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
@@ -17,6 +19,8 @@ class MindscrollApp : Application() {
     val database by lazy { MindscrollDatabase.create(this) }
     val metrics by lazy { MetricsRepository(database.metricDao()) }
     val settings by lazy { Settings(this) }
+    val moPrefs by lazy { MoPrefs(this) }
+    val moMemories by lazy { MoMemoryStore(database) }
 
     /** For writes that must finish even if the component that started them is gone. */
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

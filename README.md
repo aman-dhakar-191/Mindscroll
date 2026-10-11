@@ -40,8 +40,23 @@ The character bible and every line Mo says live in
 - **Speaks up.** A speech bubble pops out under the camera patch at real moments: a fast run
   of swipes, milestones, getting more frazzled, every fifth trip to an app, coming back after a
   break, waking up, and a memory of yesterday at the day's first open. At most one remark every
-  3 minutes (45 s for big moments) and 10 an hour; tap a bubble to dismiss it
-  ([`MoMoments.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMoments.kt)).
+  3 minutes (45 s for big moments) and 10 an hour, even across restarts; tap a bubble to
+  dismiss it ([`MoMoments.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMoments.kt)).
+- **Knows when to hush.** On the home screen, *Quiet at night* keeps Mo's bubbles away from
+  10 pm to 8 am, and *Quiet for an hour* hushes Mo right now. Every limit on Mo speaking lives
+  in one place, [`MoPolicy.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoPolicy.kt),
+  and is saved on the phone so a restart doesn't reset it.
+- **Brings things up, now and then.** With a reason, never on a timer: a check-in you asked
+  for (*Check in with me in 30 min / 1 h* on the home screen), the hour we usually scroll
+  when it comes round, or, once a day after a while in an app, a bit of Mo's own life (the
+  cloud theory, the breakfast-filming mystery). At most 3 a day, an hour apart; tap three
+  bubbles away in a row and Mo stops bringing things up for the day. Turn it off with *Mo
+  brings things up* ([`MoInitiative.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoInitiative.kt)).
+- **What Mo remembers.** Patterns Mo notices in your counts are memories with a source ("I
+  noticed" or "you told me") and how sure Mo is; Mo says so when it's a hunch. Noticed
+  patterns fade after a week unless you *Keep* them, and anything can be forgotten, one by
+  one or all at once. Forgotten patterns aren't noticed again for a month. All on the phone
+  ([`MoMemories.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMemories.kt)).
 - **Sleeps and wakes.** Mo dozes off 15 minutes after the last reel and whenever the screen is
   off: eyes shut, slow breaths, a floating "z" (in the patch, bubble, widget and notification).
   Mo wakes with a stretch and a big yawn when you're back, and after a long sleep says so

@@ -47,13 +47,17 @@ import io.github.amandhakar.mindscroll.mascot.MoMemory
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoMemories
+import io.github.amandhakar.mindscroll.mascot.MoPolicy
 import io.github.amandhakar.mindscroll.mascot.Mood
+import io.github.amandhakar.mindscroll.mascot.QuietHours
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.TextStyle
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -61,6 +65,7 @@ fun HomeScreen(
     onOpenSetup: () -> Unit,
     onOpenLog: () -> Unit,
     onOpenApps: () -> Unit,
+    onOpenMemories: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = context.app
@@ -137,6 +142,7 @@ fun HomeScreen(
             WeekCard(week)
             TrackedAppsCard(onOpenApps)
             DisplayCard()
+            MoCard(onOpenMemories)
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
                 TextButton(onClick = onOpenSetup) { Text("Permissions and setup") }
@@ -266,6 +272,68 @@ private fun DisplayCard() {
         }
     }
 }
+
+/** How Mo behaves: when to be quiet, bringing things up, check-ins, and what Mo remembers. */
+@Composable
+private fun MoCard(onOpenMemories: () -> Unit) {
+    val app = LocalContext.current.app
+    val store = app.moPrefs
+    val policy = remember { MoPolicy(store) }
+    var quietAtNight by remember { mutableStateOf(store.profile.quietHours != null) }
+    var initiatives by remember { mutableStateOf(store.profile.initiatives) }
+    var snoozedUntil by remember { mutableStateOf(policy.snoozedUntil(System.currentTimeMillis())) }
+    var checkInAt by remember { mutableStateOf<Long?>(null) }
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Mo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            ToggleRow("Quiet at night", "No speech bubbles from 10 pm to 8 am. Mo still counts.", quietAtNight) {
+                quietAtNight = it
+                store.profile = store.profile.copy(quietHours = if (it) QuietHours.NIGHT else null)
+            }
+            ToggleRow(
+                "Mo brings things up",
+                "Now and then, at most a few times a day: something Mo remembers, or a bit of Mo's own life.",
+                initiatives,
+            ) {
+                initiatives = it
+                store.profile = store.profile.copy(initiatives = it)
+            }
+            val until = snoozedUntil
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (until == null) {
+                    Text("Need Mo to hush for a bit?", Modifier.weight(1f))
+                    FilledTonalButton(onClick = {
+                        val now = System.currentTimeMillis()
+                        policy.snooze(now, SNOOZE_MS)
+                        snoozedUntil = policy.snoozedUntil(now)
+                    }) { Text("Quiet for an hour") }
+                } else {
+                    Text("Quiet until ${clockTime(until)}", Modifier.weight(1f))
+                    TextButton(onClick = {
+                        policy.unsnooze()
+                        snoozedUntil = null
+                    }) { Text("Let Mo talk") }
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                val due = checkInAt
+                Text(if (due == null) "Check in with me in" else "Mo will check in at ${clockTime(due)}", Modifier.weight(1f))
+                CHECK_IN_MINUTES.forEach { minutes ->
+                    TextButton(onClick = {
+                        val checkIn = MoMemories.checkIn(System.currentTimeMillis(), minutes)
+                        checkInAt = checkIn.dueAt
+                        app.appScope.launch { app.moMemories.add(checkIn) }
+                    }) { Text(if (minutes < 60) "$minutes min" else "${minutes / 60} h") }
+                }
+            }
+            TextButton(onClick = onOpenMemories) { Text("What Mo remembers") }
+        }
+    }
+}
+
+private val CHECK_IN_MINUTES = listOf(30L, 60L)
+
+private const val SNOOZE_MS = 60 * 60_000L
 
 @Composable
 private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {

@@ -5,12 +5,10 @@ import io.github.amandhakar.mindscroll.mascot.Mo.fill
 /**
  * When Mo says something out loud (a speech bubble from the camera patch), and what. Mo
  * speaks at real moments (a fast run of swipes, a milestone, the fifth trip to an app, coming
- * back from a break, waking up) and otherwise keeps quiet: one remark per
- * [GAP_MS] at most ([BIG_GAP_MS] for big moments like milestones and waking), and no more
- * than [MAX_PER_HOUR] an hour. Pure logic; times are elapsed-realtime ms.
+ * back from a break, waking up) and otherwise keeps quiet. Whether Mo may speak at all (how
+ * often, snoozes, quiet hours) is up to the [policy]. Pure logic; times are wall-clock ms.
  */
-class MoMoments {
-    private val spokenAt = ArrayDeque<Long>()
+class MoMoments(private val policy: MoPolicy = MoPolicy()) {
     private val recentReels = ArrayDeque<Long>()
     private var lastFastAt = Long.MIN_VALUE / 2
     private var lastReelAt: Long? = null
@@ -65,14 +63,8 @@ class MoMoments {
     /** Something Mo has been waiting to say, e.g. a memory at the start of the day. */
     fun onRemark(now: Long, text: String): String? = say(now, text)
 
-    private fun say(now: Long, text: String, big: Boolean = false): String? {
-        while (spokenAt.isNotEmpty() && now - spokenAt.first() > HOUR_MS) spokenAt.removeFirst()
-        val last = spokenAt.lastOrNull()
-        if (last != null && now - last < if (big) BIG_GAP_MS else GAP_MS) return null
-        if (spokenAt.size >= MAX_PER_HOUR) return null
-        spokenAt.addLast(now)
-        return text
-    }
+    private fun say(now: Long, text: String, big: Boolean = false): String? =
+        text.takeIf { policy.trySpeak(now, if (big) Remark.BIG else Remark.REACTION) }
 
     /** Lines in a category take turns, so Mo doesn't repeat the same one. */
     private fun next(category: String, options: List<String>): String {
@@ -82,11 +74,6 @@ class MoMoments {
     }
 
     companion object {
-        const val GAP_MS = 3 * 60_000L
-        const val BIG_GAP_MS = 45_000L
-        const val MAX_PER_HOUR = 10
-        private const val HOUR_MS = 60 * 60_000L
-
         /** This many reels within [FAST_WINDOW_MS] is a fast run of swipes. */
         const val FAST_COUNT = 6
         const val FAST_WINDOW_MS = 60_000L
