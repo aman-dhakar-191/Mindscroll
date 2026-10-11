@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import io.github.amandhakar.mindscroll.data.Days
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +21,7 @@ class AppSessionWatcher(
     packages: Set<String>,
     private val onUsage: (AppUsage) -> Unit,
 ) {
-    private val sessions = AppSessions(packages)
+    private val sessions = AppSessions(packages) { Days.today() }
     private val handler = Handler(Looper.getMainLooper())
     private val power = service.getSystemService(PowerManager::class.java)
     private val _session = MutableStateFlow<AppSession?>(null)
@@ -38,6 +39,12 @@ class AppSessionWatcher(
             if (sessions.current == null || now - lastFlushAt >= FLUSH_MS) flush(now)
             publish()
         }
+    }
+
+    /** Today's saved screen time per app, so a reopened app's timer resumes from it. */
+    fun addSavedToday(saved: Map<String, Long>) {
+        sessions.addSavedToday(saved)
+        publish()
     }
 
     fun onAppEvent(packageName: String) {

@@ -208,7 +208,7 @@ class CounterOverlay(
             return
         }
         val app = ReelApps.byPackage[current.packageName]
-        views.timer.base = current.startedAt
+        views.timer.base = current.timerBase
         views.timer.setTextColor(app?.accent?.toInt() ?: Color.WHITE)
         views.timer.visibility = View.VISIBLE
         views.timer.start()

@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -86,7 +87,12 @@ class TrackerAccessibilityService : AccessibilityService() {
                 CounterWidget.update(this@TrackerAccessibilityService, state.total)
             }
         }
-        // Live timer in the camera patch while a watched app is in use.
+        // Live timer in the camera patch while a watched app is in use. It resumes from the
+        // time already saved today, so reopening an app continues its timer.
+        scope.launch {
+            val saved = app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id).first()
+            appSessions.addSavedToday(saved.associate { it.itemKey to it.total })
+        }
         scope.launch {
             appSessions.session.collect { overlay.setSession(it) }
         }
