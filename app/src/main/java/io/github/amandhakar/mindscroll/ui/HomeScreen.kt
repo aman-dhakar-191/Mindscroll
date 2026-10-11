@@ -49,7 +49,7 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 @Composable
-fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit) {
+fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog: () -> Unit) {
     val context = LocalContext.current
     val app = context.app
     val tracker = TrackerRegistry.primary
@@ -99,8 +99,9 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit) {
             WeekCard(week)
             DisplayCard()
 
-            TextButton(onClick = onOpenSetup, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Permissions and setup")
+            Row(Modifier.align(Alignment.CenterHorizontally)) {
+                TextButton(onClick = onOpenSetup) { Text("Permissions and setup") }
+                TextButton(onClick = onOpenLog) { Text("Count looks wrong?") }
             }
         }
     }

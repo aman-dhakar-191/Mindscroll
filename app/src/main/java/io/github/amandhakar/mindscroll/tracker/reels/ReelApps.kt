@@ -10,6 +10,8 @@ package io.github.amandhakar.mindscroll.tracker.reels
 data class ReelApp(
     val packageName: String,
     val label: String,
+    /** Short tag for the detection log. */
+    val short: String,
     val containerIds: Set<String> = emptySet(),
 )
 
@@ -18,16 +20,19 @@ object ReelApps {
         ReelApp(
             packageName = "com.instagram.android",
             label = "Instagram",
+            short = "IG",
             containerIds = setOf("com.instagram.android:id/clips_viewer_view_pager"),
         ),
         ReelApp(
             packageName = "com.google.android.youtube",
             label = "YouTube Shorts",
+            short = "YT",
             containerIds = setOf("com.google.android.youtube:id/reel_recycler"),
         ),
         ReelApp(
             packageName = "com.facebook.katana",
             label = "Facebook",
+            short = "FB",
         ),
     )
 

@@ -12,6 +12,7 @@ import io.github.amandhakar.mindscroll.display.CounterNotification
 import io.github.amandhakar.mindscroll.display.CounterOverlay
 import io.github.amandhakar.mindscroll.display.CounterState
 import io.github.amandhakar.mindscroll.display.CounterWidget
+import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import io.github.amandhakar.mindscroll.tracker.TrackerHost
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +47,8 @@ class TrackerAccessibilityService : AccessibilityService() {
             packageNames = TrackerRegistry.watchedPackages()
             eventTypes = TrackerRegistry.eventTypes()
         }
+
+        DetectionLog.add("service connected, watching ${TrackerRegistry.watchedPackages()?.joinToString() ?: "all apps"}")
 
         TrackerRegistry.all.forEach { tracker ->
             hosts[tracker.id] = object : TrackerHost {
