@@ -27,6 +27,7 @@ import android.widget.Chronometer
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
@@ -68,6 +69,10 @@ class CounterOverlay(
     private var display = Settings.Display(cameraPatch = false, bubble = false)
 
     private var session: AppSession? = null
+    private var inCall = false
+    /** Long-pressing the patch hides it until this time (uptime ms). */
+    private var snoozedUntil = 0L
+    private val endSnooze = Runnable { refresh() }
 
     private class PatchViews(
         val root: LinearLayout,
@@ -86,7 +91,7 @@ class CounterOverlay(
         state = newState
         display = newDisplay
 
-        if (display.cameraPatch && isPortrait()) {
+        if (patchWanted()) {
             val views = patch ?: addPatch()?.also { patch = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
@@ -110,6 +115,31 @@ class CounterOverlay(
         }
 
         panel?.bind(newState)
+    }
+
+    /**
+     * Whether the camera patch should be on screen. Android has no shared space around the
+     * camera that apps can take turns in, so the patch steps aside instead: outside tracked
+     * apps (by default), during calls, and while snoozed, Android's own call and timer chips
+     * there stay visible.
+     */
+    private fun patchWanted(): Boolean =
+        display.cameraPatch &&
+            isPortrait() &&
+            !inCall &&
+            SystemClock.uptimeMillis() >= snoozedUntil &&
+            (!display.patchOnlyInApps || session != null)
+
+    /** Re-applies what's on screen after something that affects it changed. */
+    private fun refresh() {
+        state?.let { show(it, display) }
+    }
+
+    /** A phone or VoIP call is ringing or under way: the patch makes room for the call chip. */
+    fun setInCall(newInCall: Boolean) {
+        if (newInCall == inCall) return
+        inCall = newInCall
+        refresh()
     }
 
     /** The camera position moves with rotation; rebuild the patch for the new layout. */
@@ -195,8 +225,9 @@ class CounterOverlay(
     }
 
     fun removeAll() {
+        handler.removeCallbacks(endSnooze)
         removeSpeech()
-        removePatch()
+        removePatch(animate = false)
         bubble?.let { remove(it.root) }
         bubble = null
         closePanel()
@@ -243,8 +274,12 @@ class CounterOverlay(
             addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
             addView(View(service), LinearLayout.LayoutParams(cameraGap(camera), 1))
             addView(count, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
-            contentDescription = "Mindscroll: today's reels. Tap for details."
+            contentDescription = "Mindscroll: today's reels. Tap for details, long-press to hide for an hour."
             setOnClickListener { togglePanel() }
+            setOnLongClickListener {
+                snooze()
+                true
+            }
         }
 
         val params = overlayParams(touchable = true).apply {
@@ -278,6 +313,8 @@ class CounterOverlay(
             bindSession(it)
             layoutPatch(it, apply = true)
         }
+        // Entering or leaving a tracked app can show or hide the patch.
+        refresh()
     }
 
     private fun bindSession(views: PatchViews) {
@@ -320,12 +357,29 @@ class CounterOverlay(
 
     private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(10) else dp(6)
 
-    private fun removePatch() {
-        patch?.let {
-            it.timer.stop()
-            remove(it.root)
-        }
+    /** Takes the patch off screen, fading it out unless [animate] is false (shutting down). */
+    private fun removePatch(animate: Boolean = true) {
+        val views = patch ?: return
         patch = null
+        views.timer.stop()
+        if (speech != null) removeSpeech()
+        if (!animate) {
+            remove(views.root)
+            return
+        }
+        views.root.animate().alpha(0f).scaleX(0.6f).setDuration(200)
+            .withEndAction { remove(views.root) }
+            .start()
+    }
+
+    /** Hides the patch for [SNOOZE_MS]; it comes back by itself. */
+    private fun snooze() {
+        snoozedUntil = SystemClock.uptimeMillis() + SNOOZE_MS
+        handler.removeCallbacks(endSnooze)
+        handler.postDelayed(endSnooze, SNOOZE_MS)
+        closePanel()
+        refresh()
+        Toast.makeText(service, "${Mo.NAME} will be back in an hour.", Toast.LENGTH_SHORT).show()
     }
 
     // --- Bubble ---
@@ -523,6 +577,7 @@ class CounterOverlay(
     private companion object {
         const val PANEL_TIMEOUT_MS = 10_000L
         const val PATCH_PADDING_DP = 8
+        const val SNOOZE_MS = 60 * 60_000L
         /** How long a speech bubble stays up: a base plus reading time. */
         const val SPEECH_MS = 3_000L
         const val SPEECH_MS_PER_CHAR = 40L

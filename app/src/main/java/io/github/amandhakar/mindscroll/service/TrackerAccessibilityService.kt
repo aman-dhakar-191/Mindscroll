@@ -40,6 +40,7 @@ class TrackerAccessibilityService : AccessibilityService() {
     private lateinit var overlay: CounterOverlay
     private lateinit var appSessions: AppSessionWatcher
     private lateinit var brain: MoBrain
+    private lateinit var calls: CallWatcher
     private val hosts = mutableMapOf<String, TrackerHost>()
 
     override fun onServiceConnected() {
@@ -47,6 +48,7 @@ class TrackerAccessibilityService : AccessibilityService() {
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
         brain = MoBrain(this, overlay, app.metrics, scope).also { it.start() }
+        calls = CallWatcher(this) { inCall -> overlay.setInCall(inCall) }.also { it.start() }
         val metrics = app.metrics
         val appScope = app.appScope
         appSessions = AppSessionWatcher(this, TrackedApps.packages.value) { usage ->
@@ -144,6 +146,7 @@ class TrackerAccessibilityService : AccessibilityService() {
         // Saves unsaved screen time (on the app scope, which outlives this service).
         if (::appSessions.isInitialized) appSessions.stop()
         if (::brain.isInitialized) brain.stop()
+        if (::calls.isInitialized) calls.stop()
         if (::scope.isInitialized) scope.cancel()
         if (::overlay.isInitialized) overlay.removeAll()
         CounterNotification.cancel(this)

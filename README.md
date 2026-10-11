@@ -14,6 +14,11 @@ and keeps today's numbers in front of you, with **Mo** keeping you company:
   the other. Tap it to open a panel with Mo's take, per-app counts and the last 7 days. It's
   drawn by the accessibility service, which can draw above the status bar. A notification can't
   do that.
+  Android has no shared space around the camera that apps can take turns in (like iOS's
+  Dynamic Island), so the patch steps aside instead: by default it only shows while a tracked
+  app is in use, it always hides during phone and VoIP calls (from the audio mode, no extra
+  permission), and a long-press hides it for an hour. Android's own call and timer chips stay
+  visible.
 - **Live timer:** while a tracked app is open, the camera patch widens to show
   a ticking timer in the app's color, next to Mo. It shows today's total time in that app, so
   reopening the app resumes the timer instead of restarting it, and it starts over at midnight.
