@@ -20,6 +20,9 @@ enum class Mood(
 
     companion object {
         fun forCount(count: Long): Mood = entries.last { count >= it.from }
+
+        /** Mood for a [Fatigue] level, which uses the same scale as reel counts. */
+        fun forLevel(level: Double): Mood = entries.last { level >= it.from }
     }
 }
 
@@ -27,15 +30,23 @@ object Mo {
     const val NAME = "Mo"
 
     /**
-     * What Mo says about [count] reels today at [hour] (0-23). Changes every few reels so it
-     * doesn't flicker, and milestones get their own line.
+     * What Mo says about [count] reels today at [hour] (0-23), feeling [mood]. Changes every
+     * few reels so it doesn't flicker, and milestones get their own line. [rested] means Mo has
+     * calmed down from a break, which Mo is happy to point out.
      */
-    fun line(count: Long, hour: Int): String {
+    fun line(count: Long, hour: Int, mood: Mood = Mood.forCount(count), rested: Boolean = false): String {
+        if (rested) return restedLines[(count / STEP % restedLines.size).toInt()].format(count)
         milestones[count]?.let { return it.format(count) }
         if (hour in 0..4 && count > 0) return lateNight[(count / STEP % lateNight.size).toInt()].format(count)
-        val lines = lines.getValue(Mood.forCount(count))
+        val lines = lines.getValue(mood)
         return lines[(count / STEP % lines.size).toInt()].format(count)
     }
+
+    /**
+     * Mo has rested when the break brought the mood below what today's count alone would
+     * give: lots of reels today, but not lately.
+     */
+    fun isRested(count: Long, mood: Mood): Boolean = mood < Mood.forCount(count)
 
     private const val STEP = 5L
 
@@ -83,6 +94,13 @@ object Mo {
             "The reels will still be there later. Promise.",
             "We've seen enough cats for today. Probably.",
         ),
+    )
+
+    private val restedLines = listOf(
+        "Ahh, that break helped. I can see straight again.",
+        "Look at me, all calm. Phone-down time suits us.",
+        "{n} reels today, but I've had a rest. Feeling much better.",
+        "Breaks are my favorite reel.",
     )
 
     private val lateNight = listOf(

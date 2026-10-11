@@ -29,4 +29,7 @@ interface MetricDao {
            GROUP BY day ORDER BY day""",
     )
     fun observeDailyTotals(trackerId: String, fromDay: Long, toDay: Long): Flow<List<DayTotal>>
+
+    @Query("SELECT timestamp FROM metric_event WHERE tracker_id = :trackerId AND timestamp >= :since")
+    suspend fun timesSince(trackerId: String, since: Long): List<Long>
 }

@@ -23,8 +23,12 @@ of you, with **Mo** keeping you company:
 ## Meet Mo
 
 Mo is a small blob who counts with you: cheeky, on your side, never preachy. Mo's mood (and
-color) follows today's count: **chill** (0–15), **curious** (16–40), **wobbly** (41–80),
-**dizzy** (81–150) and **running on fumes** (151+). Mo's lines change every few reels, with
+color) follows how worn out Mo is: **chill**, **curious**, **wobbly**, **dizzy** and
+**running on fumes**. Every reel adds to it, and it halves every 20 minutes you aren't watching
+reels, so a binge frazzles Mo and putting the phone down calms Mo back down. An hour's break
+takes Mo from dizzy to chill, and Mo will thank you for it. The thresholds match reel counts
+(16, 41, 81, 151), and the model is in
+[`Fatigue.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Fatigue.kt). Mo's lines change every few reels, with
 special ones at milestones and late at night. Mo is animated too: Mo blinks, plays a small
 idle loop for each mood (chill breathes, curious glances around, wobbly sways, dizzy's eyes spin,
 sleepy nods off with a floating "z"), and looks surprised each time a new reel counts. The

@@ -74,8 +74,9 @@ class TrackerAccessibilityService : AccessibilityService() {
             app.metrics.observeTodayByItem(primary.id),
             app.metrics.observeDailyTotals(primary.id, 7),
             app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id),
-        ) { total, byItem, week, time ->
-            CounterState(total, AppStat.merge(byItem, time, primary::itemLabel), week)
+            app.metrics.observeMood(primary.id),
+        ) { total, byItem, week, time, mood ->
+            CounterState(total, AppStat.merge(byItem, time, primary::itemLabel), week, mood)
         }
             // Each new reel updates all three queries; show the settled result once.
             .debounce(150)
@@ -84,7 +85,7 @@ class TrackerAccessibilityService : AccessibilityService() {
             combine(state, app.settings.observeDisplay()) { s, d -> s to d }.collect { (state, display) ->
                 CounterNotification.show(this@TrackerAccessibilityService, state)
                 overlay.show(state, display)
-                CounterWidget.update(this@TrackerAccessibilityService, state.total)
+                CounterWidget.update(this@TrackerAccessibilityService, state)
             }
         }
         // Live timer in the camera patch while a watched app is in use. It resumes from the

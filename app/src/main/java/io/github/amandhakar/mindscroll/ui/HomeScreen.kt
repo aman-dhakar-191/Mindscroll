@@ -62,6 +62,7 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
     val timeByItem by remember { app.metrics.observeTodayByItem(TrackerRegistry.screenTime.id) }
         .collectAsStateWithLifecycle(emptyList())
     val apps = AppStat.merge(byItem, timeByItem, tracker::itemLabel)
+    val mood by remember { app.metrics.observeMood(tracker.id) }.collectAsStateWithLifecycle(Mood.CHILL)
 
     Surface(Modifier.fillMaxSize()) {
         Column(
@@ -81,7 +82,7 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
                 }
             }
 
-            MoHeader(total)
+            MoHeader(total, mood)
 
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(total.toString(), fontSize = 88.sp, fontWeight = FontWeight.Bold)
@@ -125,8 +126,8 @@ fun HomeScreen(permissions: PermissionState, onOpenSetup: () -> Unit, onOpenLog:
 }
 
 @Composable
-private fun MoHeader(total: Long) {
-    val mood = Mood.forCount(total)
+private fun MoHeader(total: Long, mood: Mood) {
+    val rested = Mo.isRested(total, mood)
     val accent = Color(mood.color)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         MoFace(mood, Modifier.size(88.dp), reactTo = total)
@@ -141,7 +142,7 @@ private fun MoHeader(total: Long) {
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(Mo.line(total, LocalTime.now().hour), style = MaterialTheme.typography.bodyLarge)
+                Text(Mo.line(total, LocalTime.now().hour, mood, rested), style = MaterialTheme.typography.bodyLarge)
             }
         }
     }

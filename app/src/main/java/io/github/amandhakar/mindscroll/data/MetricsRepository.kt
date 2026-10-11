@@ -1,8 +1,14 @@
 package io.github.amandhakar.mindscroll.data
 
+import io.github.amandhakar.mindscroll.mascot.Fatigue
+import io.github.amandhakar.mindscroll.mascot.Mood
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -43,4 +49,25 @@ class MetricsRepository(private val dao: MetricDao) {
                 (from..today).map { DayTotal(it, byDay[it] ?: 0) }
             }
         }
+
+    /**
+     * Mo's mood from [Fatigue]: updated when [trackerId] records something and once a minute
+     * otherwise, so a break visibly calms Mo down. Emits only when the mood changes.
+     */
+    fun observeMood(trackerId: String): Flow<Mood> =
+        combine(observeTodayTotal(trackerId), minuteTicks()) { _, _ -> Unit }
+            .map { moodNow(trackerId) }
+            .distinctUntilChanged()
+
+    suspend fun moodNow(trackerId: String): Mood {
+        val now = System.currentTimeMillis()
+        return Mood.forLevel(Fatigue.level(dao.timesSince(trackerId, now - Fatigue.WINDOW_MS), now))
+    }
+
+    private fun minuteTicks(): Flow<Unit> = flow {
+        while (true) {
+            emit(Unit)
+            delay(60_000)
+        }
+    }
 }
