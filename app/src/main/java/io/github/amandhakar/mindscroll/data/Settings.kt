@@ -2,6 +2,7 @@ package io.github.amandhakar.mindscroll.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -31,6 +32,20 @@ class Settings(context: Context) {
         get() = prefs.getInt(KEY_BUBBLE_X, 24) to prefs.getInt(KEY_BUBBLE_Y, 400)
         set(value) = prefs.edit().putInt(KEY_BUBBLE_X, value.first).putInt(KEY_BUBBLE_Y, value.second).apply()
 
+    /** Packages to track. Until the user picks, the apps Mindscroll knows reel feeds for. */
+    var trackedApps: Set<String>
+        get() = prefs.getStringSet(KEY_TRACKED_APPS, null)?.toSet() ?: ReelApps.known.keys
+        set(value) = prefs.edit().putStringSet(KEY_TRACKED_APPS, value).apply()
+
+    fun observeTrackedApps(): Flow<Set<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_TRACKED_APPS) trySend(trackedApps)
+        }
+        trySend(trackedApps)
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.conflate()
+
     fun display() = Display(cameraPatch, bubble)
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
@@ -48,5 +63,6 @@ class Settings(context: Context) {
         const val KEY_BUBBLE = "bubble"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
+        const val KEY_TRACKED_APPS = "tracked_apps"
     }
 }

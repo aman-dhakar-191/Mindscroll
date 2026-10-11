@@ -34,7 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.Mood
-import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
+import io.github.amandhakar.mindscroll.tracker.TrackedApps
 
 @Composable
 fun OnboardingScreen(
@@ -83,7 +83,8 @@ fun OnboardingScreen(
             StepCard(
                 title = "1. Count reels (required)",
                 body = "Turn on Mindscroll under Accessibility → Installed apps. It only looks at " +
-                    "${ReelApps.all.joinToString { it.label }}, and only at the shape of their screens " +
+                    "the apps you choose to track (${trackedNames()} to start; change them anytime " +
+                    "under Apps to track), and only at the shape of their screens " +
                     "(is a reel feed showing, did it scroll). It doesn't read text or messages, and it has no internet permission, so nothing leaves your phone.\n\n" +
                     "If Android says \"Restricted setting\", open App info, tap ⋮ → Allow restricted " +
                     "settings, then try again.",
@@ -172,3 +173,6 @@ private fun StepCard(
         }
     }
 }
+
+private fun trackedNames(): String =
+    TrackedApps.packages.value.map(TrackedApps::label).sorted().joinToString().ifEmpty { "no apps yet" }

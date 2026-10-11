@@ -27,7 +27,7 @@ data class AppUsage(val packageName: String, val ms: Long)
  * session's [AppSession.timerBase]. [today] gives the current day, so totals reset overnight.
  */
 class AppSessions(
-    private val packages: Set<String>,
+    private var packages: Set<String>,
     private val today: () -> Long,
 ) {
     var current: AppSession? = null
@@ -62,6 +62,12 @@ class AppSessions(
         )
         lastSeenAt = now
         countedUntil = now
+    }
+
+    /** The user changed which apps are tracked. A session in an app no longer tracked ends. */
+    fun setPackages(newPackages: Set<String>) {
+        packages = newPackages
+        if (current?.packageName?.let { it !in newPackages } == true) end()
     }
 
     /**

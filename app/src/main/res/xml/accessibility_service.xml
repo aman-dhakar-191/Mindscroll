@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Packages and event types are narrowed further at runtime from the registered trackers. -->
+<!-- Packages are set at runtime from the apps the user chose to track; event types are
+     narrowed to what the trackers need. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeViewScrolled|typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_description"
-    android:notificationTimeout="100"
-    android:packageNames="com.instagram.android,com.google.android.youtube,com.facebook.katana" />
+    android:notificationTimeout="100" />

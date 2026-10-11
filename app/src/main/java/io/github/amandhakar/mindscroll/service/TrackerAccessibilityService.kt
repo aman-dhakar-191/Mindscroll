@@ -14,6 +14,7 @@ import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.display.CounterState
 import io.github.amandhakar.mindscroll.display.CounterWidget
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
+import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.TrackerHost
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import kotlinx.coroutines.CoroutineScope
@@ -48,17 +49,28 @@ class TrackerAccessibilityService : AccessibilityService() {
         brain = MoBrain(this, overlay, app.metrics, scope).also { it.start() }
         val metrics = app.metrics
         val appScope = app.appScope
-        appSessions = AppSessionWatcher(this, TrackerRegistry.watchedPackages()?.toSet().orEmpty()) { usage ->
+        appSessions = AppSessionWatcher(this, TrackedApps.packages.value) { usage ->
             appScope.launch { metrics.record(TrackerRegistry.screenTime.id, usage.packageName, usage.ms) }
         }
 
-        // Listen only to what the registered trackers need.
-        serviceInfo = serviceInfo.apply {
-            packageNames = TrackerRegistry.watchedPackages()
-            eventTypes = TrackerRegistry.eventTypes()
+        // Listen only to what the trackers need, and follow changes to the tracked apps.
+        scope.launch {
+            TrackedApps.packages.collect { tracked ->
+                val packages = TrackerRegistry.watchedPackages()
+                val self = this@TrackerAccessibilityService.packageName
+                serviceInfo = serviceInfo.apply {
+                    packageNames = when {
+                        packages == null -> null
+                        // No apps tracked: listen only to ourselves (an empty list means every app).
+                        packages.isEmpty() -> arrayOf(self)
+                        else -> packages
+                    }
+                    eventTypes = TrackerRegistry.eventTypes()
+                }
+                appSessions.setPackages(tracked)
+                DetectionLog.add("watching ${tracked.joinToString { TrackedApps.label(it) }.ifEmpty { "no apps" }}")
+            }
         }
-
-        DetectionLog.add("service connected, watching ${TrackerRegistry.watchedPackages()?.joinToString() ?: "all apps"}")
 
         TrackerRegistry.all.forEach { tracker ->
             hosts[tracker.id] = object : TrackerHost {
