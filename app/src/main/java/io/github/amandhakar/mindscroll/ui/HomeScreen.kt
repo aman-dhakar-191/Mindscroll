@@ -112,7 +112,7 @@ private fun MoHeader(total: Long) {
     val mood = Mood.forCount(total)
     val accent = Color(mood.color)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        MoFace(mood, Modifier.size(88.dp))
+        MoFace(mood, Modifier.size(88.dp), reactTo = total)
         Card(
             shape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp),
             colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.18f)),

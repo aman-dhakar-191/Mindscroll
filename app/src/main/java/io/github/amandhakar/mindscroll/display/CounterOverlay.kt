@@ -295,8 +295,9 @@ class CounterOverlay(
 
     // --- Helpers ---
 
-    /** A little hop when the count goes up. */
-    private fun bump(count: View, mo: View) {
+    /** When the count goes up: the number pops, and Mo hops and looks surprised. */
+    private fun bump(count: View, mo: MoView) {
+        mo.react()
         count.animate().cancel()
         count.scaleX = 1.35f
         count.scaleY = 1.35f
@@ -364,7 +365,7 @@ private class PanelViews(
     onOpenApp: () -> Unit,
     onClose: () -> Unit,
 ) {
-    private val mo = MoView(context)
+    private val mo = MoView(context).apply { idleMotion = true }
     private val moodText = text(context, 12f, bold = true)
     private val lineText = text(context, 15f, color = Color.WHITE).apply {
         maxLines = 3

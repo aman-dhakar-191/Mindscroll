@@ -19,7 +19,12 @@ of you, with **Mo** keeping you company:
 Mo is a small blob who counts with you: cheeky, on your side, never preachy. Mo's mood (and
 color) follows today's count: **chill** (0–15), **curious** (16–40), **wobbly** (41–80),
 **dizzy** (81–150) and **running on fumes** (151+). Mo's lines change every few reels, with
-special ones at milestones and late at night. Moods and lines live in
+special ones at milestones and late at night. Mo is animated too: Mo blinks, plays a small
+idle loop for each mood (chill breathes, curious glances around, wobbly sways, dizzy's eyes spin,
+sleepy nods off with a floating "z"), and looks surprised each time a new reel counts. The
+always-on camera patch and bubble only animate the blinks and reactions, so they barely redraw;
+the panel and the app play the full idle loop. Timings are in
+[`MoMotion.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoMotion.kt). Moods and lines live in
 [`Mo.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/Mo.kt), and the drawing is in
 [`MoPainter.kt`](app/src/main/java/io/github/amandhakar/mindscroll/mascot/MoPainter.kt).
 
