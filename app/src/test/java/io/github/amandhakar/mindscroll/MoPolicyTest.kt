@@ -129,4 +129,28 @@ class MoPolicyTest {
         assertFalse(p.trySpeak(back, Remark.REACTION))
         assertTrue(p.trySpeak(back + MoPolicy.GAP_MS, Remark.REACTION))
     }
+
+    @Test
+    fun beingWavedAwayPausesInitiativesForTheDay() {
+        val p = policy()
+        repeat(MoPolicy.DISMISSALS_TO_PAUSE - 1) { p.speechEnded(at(9), dismissed = true) }
+        p.speechEnded(at(9), dismissed = false) // one left to run its course resets the streak
+        repeat(MoPolicy.DISMISSALS_TO_PAUSE - 1) { p.speechEnded(at(9), dismissed = true) }
+        assertTrue(p.allows(at(10), Remark.INITIATIVE))
+        p.speechEnded(at(10), dismissed = true)
+        assertFalse(p.allows(at(11), Remark.INITIATIVE))
+        assertTrue(p.allows(at(11), Remark.REACTION)) // reactions and check-ins carry on
+        assertTrue(p.allows(at(11), Remark.FOLLOW_THROUGH))
+        assertTrue(p.allows(at(9, day = 2), Remark.INITIATIVE))
+    }
+
+    @Test
+    fun followThroughSkipsTheInitiativeBudgetButNotQuiet() {
+        val p = policy()
+        repeat(MoPolicy.MAX_INITIATIVES_PER_DAY) { i -> assertTrue(p.trySpeak(at(9 + i * 2), Remark.INITIATIVE)) }
+        assertFalse(p.allows(at(16), Remark.INITIATIVE))
+        assertTrue(p.trySpeak(at(16), Remark.FOLLOW_THROUGH))
+        p.snooze(at(17), hour)
+        assertFalse(p.allows(at(17, 30), Remark.FOLLOW_THROUGH))
+    }
 }

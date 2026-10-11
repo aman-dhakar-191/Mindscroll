@@ -20,6 +20,8 @@ data class QuietHours(val startMinute: Int, val endMinute: Int) {
 data class MoProfile(
     /** When Mo keeps quiet every day, or null for never. */
     val quietHours: QuietHours? = null,
+    /** Whether Mo may bring things up unprompted. Check-ins the user asked for still happen. */
+    val initiatives: Boolean = true,
 )
 
 /**
@@ -37,6 +39,15 @@ data class MoInteractionState(
     val initiativeDay: Long? = null,
     /** Unprompted remarks on [initiativeDay]. */
     val dailyInitiativeCount: Int = 0,
+    /** Speech bubbles tapped away in a row, without one left to run its course in between. */
+    val dismissalStreak: Int = 0,
+    /** The day Mo stopped bringing things up after being waved away. */
+    val initiativesPausedDay: Long? = null,
+    /** The day Mo last brought up a remembered pattern. */
+    val lastCallbackDay: Long? = null,
+    /** The day Mo last told a bit of Mo's own story, and how far along the story is. */
+    val lastCharacterDay: Long? = null,
+    val characterBeat: Int = 0,
 )
 
 /** Where [MoPolicy] keeps its state. On the phone it's preferences; in tests, memory. */
@@ -58,14 +69,20 @@ enum class Remark {
     BIG,
     /** Mo bringing something up unprompted. The first thing to go when Mo has said enough. */
     INITIATIVE,
+    /**
+     * A check-in the user asked for. Needs only a short gap and ignores the budget for
+     * unprompted remarks, but still waits out snoozes and quiet hours.
+     */
+    FOLLOW_THROUGH,
 }
 
 /**
  * The one place that decides whether Mo may speak at all, whatever Mo wants to say: never
  * while snoozed or in quiet hours, one remark per [GAP_MS] at most ([BIG_GAP_MS] for big
  * moments), no more than [MAX_PER_HOUR] an hour, and unprompted remarks at most
- * [MAX_INITIATIVES_PER_DAY] a day and [INITIATIVE_GAP_MS] apart. What Mo says is decided
- * elsewhere ([MoMoments]).
+ * [MAX_INITIATIVES_PER_DAY] a day and [INITIATIVE_GAP_MS] apart, none at all if the user
+ * turned them off or waved away [DISMISSALS_TO_PAUSE] bubbles in a row today. What Mo says is
+ * decided elsewhere ([MoMoments], [MoInitiative]).
  *
  * Times are wall-clock ms, so the limits survive restarts and reboots. If the clock is set
  * back, times "in the future" count as now: Mo waits a gap rather than staying quiet for days.
@@ -79,9 +96,11 @@ class MoPolicy(
         if (quiet(now)) return false
         val state = current(now)
         val last = state.spokenAt.lastOrNull()
-        if (last != null && now - last < if (kind == Remark.BIG) BIG_GAP_MS else GAP_MS) return false
+        val gap = if (kind == Remark.BIG || kind == Remark.FOLLOW_THROUGH) BIG_GAP_MS else GAP_MS
+        if (last != null && now - last < gap) return false
         if (state.spokenAt.size >= MAX_PER_HOUR) return false
         if (kind == Remark.INITIATIVE) {
+            if (!store.profile.initiatives || state.initiativesPausedDay == day(now)) return false
             val initiativesToday = if (state.initiativeDay == day(now)) state.dailyInitiativeCount else 0
             if (initiativesToday >= MAX_INITIATIVES_PER_DAY) return false
             val lastInitiative = state.lastInitiativeAt
@@ -120,6 +139,25 @@ class MoPolicy(
         return true
     }
 
+    /**
+     * A speech bubble went away: [dismissed] if the user tapped it away, else it ran its
+     * course. Being waved away [DISMISSALS_TO_PAUSE] times in a row pauses unprompted remarks
+     * for the rest of the day.
+     */
+    fun speechEnded(now: Long, dismissed: Boolean) {
+        val state = store.interaction
+        if (!dismissed) {
+            if (state.dismissalStreak != 0) store.interaction = state.copy(dismissalStreak = 0)
+            return
+        }
+        val streak = state.dismissalStreak + 1
+        store.interaction = if (streak >= DISMISSALS_TO_PAUSE) {
+            state.copy(dismissalStreak = 0, initiativesPausedDay = day(now))
+        } else {
+            state.copy(dismissalStreak = streak)
+        }
+    }
+
     /** Mo keeps quiet for [durationMs] from [now]. */
     fun snooze(now: Long, durationMs: Long) {
         store.interaction = store.interaction.copy(quietUntil = now + durationMs.coerceIn(0, MAX_SNOOZE_MS))
@@ -142,7 +180,7 @@ class MoPolicy(
         return hours.contains(time.hour * 60 + time.minute)
     }
 
-    private fun day(now: Long): Long = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
+    fun day(now: Long): Long = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
 
     /**
      * The stored state with remarks older than an hour dropped. Times after [now] mean the
@@ -165,6 +203,7 @@ class MoPolicy(
 
         const val INITIATIVE_GAP_MS = 60 * 60_000L
         const val MAX_INITIATIVES_PER_DAY = 3
+        const val DISMISSALS_TO_PAUSE = 3
 
         const val MAX_SNOOZE_MS = 24 * 60 * 60_000L
         private const val HOUR_MS = 60 * 60_000L

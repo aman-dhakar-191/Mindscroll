@@ -21,6 +21,7 @@ class MoPrefs(context: Context) : MoStore {
             } else {
                 null
             },
+            initiatives = prefs.getBoolean(KEY_INITIATIVES, true),
         )
         set(value) = prefs.edit().apply {
             val hours = value.quietHours
@@ -31,6 +32,7 @@ class MoPrefs(context: Context) : MoStore {
                 putInt(KEY_QUIET_START, hours.startMinute)
                 putInt(KEY_QUIET_END, hours.endMinute)
             }
+            putBoolean(KEY_INITIATIVES, value.initiatives)
         }.apply()
 
     override var interaction: MoInteractionState
@@ -41,6 +43,11 @@ class MoPrefs(context: Context) : MoStore {
             lastInitiativeAt = long(KEY_LAST_INITIATIVE_AT),
             initiativeDay = long(KEY_INITIATIVE_DAY),
             dailyInitiativeCount = prefs.getInt(KEY_DAILY_INITIATIVES, 0),
+            dismissalStreak = prefs.getInt(KEY_DISMISSAL_STREAK, 0),
+            initiativesPausedDay = long(KEY_INITIATIVES_PAUSED_DAY),
+            lastCallbackDay = long(KEY_LAST_CALLBACK_DAY),
+            lastCharacterDay = long(KEY_LAST_CHARACTER_DAY),
+            characterBeat = prefs.getInt(KEY_CHARACTER_BEAT, 0),
         )
         set(value) = prefs.edit().apply {
             putString(KEY_SPOKEN_AT, value.spokenAt.joinToString(","))
@@ -49,6 +56,11 @@ class MoPrefs(context: Context) : MoStore {
             putOrRemove(KEY_LAST_INITIATIVE_AT, value.lastInitiativeAt)
             putOrRemove(KEY_INITIATIVE_DAY, value.initiativeDay)
             putInt(KEY_DAILY_INITIATIVES, value.dailyInitiativeCount)
+            putInt(KEY_DISMISSAL_STREAK, value.dismissalStreak)
+            putOrRemove(KEY_INITIATIVES_PAUSED_DAY, value.initiativesPausedDay)
+            putOrRemove(KEY_LAST_CALLBACK_DAY, value.lastCallbackDay)
+            putOrRemove(KEY_LAST_CHARACTER_DAY, value.lastCharacterDay)
+            putInt(KEY_CHARACTER_BEAT, value.characterBeat)
         }.apply()
 
     private fun long(key: String): Long? = if (prefs.contains(key)) prefs.getLong(key, 0) else null
@@ -60,11 +72,17 @@ class MoPrefs(context: Context) : MoStore {
     private companion object {
         const val KEY_QUIET_START = "quiet_start_minute"
         const val KEY_QUIET_END = "quiet_end_minute"
+        const val KEY_INITIATIVES = "initiatives"
         const val KEY_SPOKEN_AT = "spoken_at"
         const val KEY_QUIET_UNTIL = "quiet_until"
         const val KEY_LAST_GREETING_DAY = "last_greeting_day"
         const val KEY_LAST_INITIATIVE_AT = "last_initiative_at"
         const val KEY_INITIATIVE_DAY = "initiative_day"
         const val KEY_DAILY_INITIATIVES = "daily_initiatives"
+        const val KEY_DISMISSAL_STREAK = "dismissal_streak"
+        const val KEY_INITIATIVES_PAUSED_DAY = "initiatives_paused_day"
+        const val KEY_LAST_CALLBACK_DAY = "last_callback_day"
+        const val KEY_LAST_CHARACTER_DAY = "last_character_day"
+        const val KEY_CHARACTER_BEAT = "character_beat"
     }
 }

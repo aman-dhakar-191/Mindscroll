@@ -62,6 +62,8 @@ class CounterOverlay(
     private var panelClosedAt = 0L
 
     private var speech: View? = null
+    /** Called when a speech bubble goes away: tapped away (true) or after running its course. */
+    var onSpeechEnded: ((dismissed: Boolean) -> Unit)? = null
     private var moAsleep = false
 
     private var state: CounterState? = null
@@ -136,9 +138,10 @@ class CounterOverlay(
     /**
      * Mo says something: a speech bubble under the camera patch (or the floating bubble), for
      * a few seconds or until tapped. Skipped while the panel is open or nothing shows Mo.
+     * Returns whether it was shown.
      */
-    fun say(text: String) {
-        if (panel != null) return
+    fun say(text: String): Boolean {
+        if (panel != null) return false
         val patchViews = patch
         val bubbleViews = bubble
         val params = overlayParams(touchable = true)
@@ -157,7 +160,7 @@ class CounterOverlay(
                 params.x = at.x
                 params.y = at.y + dp(64)
             }
-            else -> return
+            else -> return false
         }
         removeSpeech()
         val accent = (state?.mood ?: Mood.CHILL).color.toInt()
@@ -173,9 +176,9 @@ class CounterOverlay(
                 setStroke(dp(1), accent)
             }
             contentDescription = "${Mo.NAME} says: $text"
-            setOnClickListener { removeSpeech() }
+            setOnClickListener { removeSpeech(dismissed = true) }
         }
-        if (!add(view, params)) return
+        if (!add(view, params)) return false
         speech = view
         if (speaker.asleep) speaker.wakeUp() else speaker.react()
         view.alpha = 0f
@@ -183,14 +186,17 @@ class CounterOverlay(
         view.animate().alpha(1f).translationY(0f).setDuration(200).setInterpolator(DecelerateInterpolator()).start()
         handler.removeCallbacks(hideSpeech)
         handler.postDelayed(hideSpeech, SPEECH_MS + text.length * SPEECH_MS_PER_CHAR)
+        return true
     }
 
-    private val hideSpeech = Runnable { removeSpeech() }
+    private val hideSpeech = Runnable { removeSpeech(dismissed = false) }
 
-    private fun removeSpeech() {
+    /** [dismissed] says how the bubble went away, or is null when it was cleared for other reasons. */
+    private fun removeSpeech(dismissed: Boolean? = null) {
         handler.removeCallbacks(hideSpeech)
         val view = speech ?: return
         speech = null
+        dismissed?.let { onSpeechEnded?.invoke(it) }
         view.animate().alpha(0f).setDuration(150).withEndAction { remove(view) }.start()
     }
 
