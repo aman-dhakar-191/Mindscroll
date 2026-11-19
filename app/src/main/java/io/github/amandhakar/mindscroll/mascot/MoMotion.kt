@@ -23,6 +23,14 @@ data class MoPose(
     val peek: Float = 0f,
 )
 
+/** The visual meaning of a tracked-app session transition. */
+enum class SessionReaction {
+    NONE,
+    FIRST_ENTRY,
+    APP_SWITCH,
+    RETURN_AFTER_BREAK,
+}
+
 /** Timing for Mo's animations, shared by the app (Compose) and the overlays (views). */
 object MoMotion {
     /** Length of one idle loop. */
@@ -36,6 +44,29 @@ object MoMotion {
     const val ANTICIPATION_MS = 90L
     const val MOOD_TRANSITION_MS = 420L
     const val PEEK_MS = 680L
+    const val RETURN_BREAK_THRESHOLD_MS = 5 * 60_000L
+
+    /**
+     * Classifies only meaningful session edges; callers invoke this when the session changes.
+     * A short inactive gap is treated as a fresh arrival, while a longer one gets a welcome-back.
+     */
+    fun sessionReaction(
+        previousPackage: String?,
+        currentPackage: String?,
+        endedAtMs: Long?,
+        nowMs: Long,
+        hasSeenSession: Boolean,
+    ): SessionReaction {
+        if (currentPackage == null) return SessionReaction.NONE
+        if (!hasSeenSession) return SessionReaction.FIRST_ENTRY
+        if (endedAtMs != null && nowMs - endedAtMs >= RETURN_BREAK_THRESHOLD_MS) {
+            return SessionReaction.RETURN_AFTER_BREAK
+        }
+        if (previousPackage != null && previousPackage != currentPackage) {
+            return SessionReaction.APP_SWITCH
+        }
+        return SessionReaction.FIRST_ENTRY
+    }
 
     fun phase(timeMs: Long): Float = (timeMs.mod(LOOP_MS)).toFloat() / LOOP_MS
 
