@@ -35,6 +35,9 @@ fun SettingsScreen(onBack: () -> Unit) {
     var autoScroll by remember { mutableStateOf(settings.autoScroll) }
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
+    var mascotSize by remember { mutableStateOf(settings.mascotSize) }
+    var motionStyle by remember { mutableStateOf(settings.motionStyle) }
+    var milestones by remember { mutableStateOf(settings.milestoneReactions) }
 
     Scaffold(
         topBar = {
@@ -101,6 +104,45 @@ fun SettingsScreen(onBack: () -> Unit) {
                     ) {
                         bubble = it
                         settings.bubble = it
+                    }
+                }
+            }
+            Text("Mo's personality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Card {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Mascot size", style = MaterialTheme.typography.bodyLarge)
+                    InfoChoice("Compact", mascotSize == Settings.MascotSize.COMPACT) {
+                        mascotSize = Settings.MascotSize.COMPACT
+                        settings.mascotSize = mascotSize
+                    }
+                    InfoChoice("Standard", mascotSize == Settings.MascotSize.STANDARD) {
+                        mascotSize = Settings.MascotSize.STANDARD
+                        settings.mascotSize = mascotSize
+                    }
+                    InfoChoice("Large", mascotSize == Settings.MascotSize.LARGE) {
+                        mascotSize = Settings.MascotSize.LARGE
+                        settings.mascotSize = mascotSize
+                    }
+                    Text("Animation style", style = MaterialTheme.typography.bodyLarge)
+                    InfoChoice("Calm · reduced idle motion", motionStyle == Settings.MotionStyle.CALM) {
+                        motionStyle = Settings.MotionStyle.CALM
+                        settings.motionStyle = motionStyle
+                    }
+                    InfoChoice("Balanced", motionStyle == Settings.MotionStyle.BALANCED) {
+                        motionStyle = Settings.MotionStyle.BALANCED
+                        settings.motionStyle = motionStyle
+                    }
+                    InfoChoice("Playful · bigger reactions to repeated taps", motionStyle == Settings.MotionStyle.PLAYFUL) {
+                        motionStyle = Settings.MotionStyle.PLAYFUL
+                        settings.motionStyle = motionStyle
+                    }
+                    PreferenceSwitch(
+                        title = "Milestone reactions",
+                        subtitle = "Let Mo celebrate reel-count milestones with occasional speech bubbles.",
+                        checked = milestones,
+                    ) {
+                        milestones = it
+                        settings.milestoneReactions = it
                     }
                 }
             }
