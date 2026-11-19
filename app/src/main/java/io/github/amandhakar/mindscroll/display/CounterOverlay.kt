@@ -329,7 +329,13 @@ class CounterOverlay(
     /** The app in use right now, or null. Shows or hides the live timer in the patch. */
     fun setSession(newSession: AppSession?) {
         if (newSession == session) return
+        val previousPackage = session?.packageName
         session = newSession
+        // A different app/session is a new moment: Mo peeks out, then returns to idle.
+        if (newSession != null && newSession.packageName != previousPackage) {
+            patch?.mo?.peek()
+            bubble?.mo?.peek()
+        }
         patch?.let {
             bindSession(it)
             layoutPatch(it, apply = true)
