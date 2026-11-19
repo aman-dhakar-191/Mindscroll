@@ -37,6 +37,8 @@ object CounterNotification {
     private const val ID_COUNTER = 1
     private const val ID_OFF = 2
     private const val ID_LIVE = 3
+    /** Notification.EXTRA_REQUEST_PROMOTED_ONGOING; not exposed in the public SDK stubs. */
+    private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
 
     /**
      * While a tracked app is in use: a Live Update (Android 16+) the system can show as a chip
@@ -59,7 +61,7 @@ object CounterNotification {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openApp(context))
-            .addExtras(Bundle().apply { putBoolean(Notification.EXTRA_REQUEST_PROMOTED_ONGOING, true) })
+            .addExtras(Bundle().apply { putBoolean(EXTRA_REQUEST_PROMOTED_ONGOING, true) })
             .build()
         if (!notification.hasPromotableCharacteristics()) return false
         manager.notify(ID_LIVE, notification)
