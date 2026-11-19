@@ -270,7 +270,7 @@ class CounterOverlay(
         }
         val info = ViewFlipper(service).apply {
             isAutoStart = true
-            flipInterval = INFO_FLIP_MS
+            flipInterval = INFO_FLIP_MS.toInt()
             inAnimation = TranslateAnimation(0f, 0f, dp(18).toFloat(), 0f).apply { duration = 260 }
             outAnimation = TranslateAnimation(0f, 0f, 0f, -dp(18).toFloat()).apply { duration = 220 }
             addView(count, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -354,8 +354,7 @@ class CounterOverlay(
     }
 
     /**
-     * Sizes the patch so both sides of the camera are equally wide, keeping the camera hole
-     * centered in it, with room for the timer when it's showing.
+     * Sizes the patch around the larger Mo and the single vertically-flipping information slot.
      */
     private fun layoutPatch(views: PatchViews, apply: Boolean) {
         val timerWidth = views.timer.paint.measureText("00:00").toInt() + dp(12)
