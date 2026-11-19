@@ -61,6 +61,16 @@ class MoMotionTest {
     }
 
     @Test
+    fun peekStartsAndSettlesWithinItsWindow() {
+        assertEquals(0f, MoMotion.peek(-1), 0f)
+        assertEquals(0f, MoMotion.peek(0), 0.01f)
+        assertTrue(MoMotion.peek(250) > 0.8f)
+        assertEquals(1f, MoMotion.peek(MoMotion.PEEK_MS / 2), 0.01f)
+        assertTrue(MoMotion.peek(600) in 0f..1f)
+        assertEquals(0f, MoMotion.peek(MoMotion.PEEK_MS), 0f)
+    }
+
+    @Test
     fun blinkGapsVaryWithinRange() {
         val random = Random(42)
         val gaps = List(50) { MoMotion.nextBlinkDelayMs(random) }
