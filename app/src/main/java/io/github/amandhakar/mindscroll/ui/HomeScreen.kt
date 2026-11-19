@@ -39,6 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.DayTotal
 import io.github.amandhakar.mindscroll.data.Days
@@ -142,6 +144,7 @@ fun HomeScreen(
             WeekCard(week)
             TrackedAppsCard(onOpenApps)
             DisplayCard()
+            DiagnosticsCard()
             MoCard(onOpenMemories)
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
@@ -273,6 +276,28 @@ private fun DisplayCard() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsCard() {
+    val context = LocalContext.current
+    val settings = context.app.settings
+    var enabled by remember { mutableStateOf(settings.diagnosticsEnabled) }
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Diagnostics", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            ToggleRow(
+                "Share diagnostic data",
+                "Send crash reports and technical accessibility-service events to help diagnose counting issues. Screen contents are not collected.",
+                enabled,
+            ) {
+                enabled = it
+                settings.diagnosticsEnabled = it
+                FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(it)
+                FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(it)
+            }
         }
     }
 }

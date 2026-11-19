@@ -4,6 +4,9 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Bundle
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -43,9 +46,12 @@ class TrackerAccessibilityService : AccessibilityService() {
     private lateinit var brain: MoBrain
     private lateinit var calls: CallWatcher
     private val hosts = mutableMapOf<String, TrackerHost>()
+    private val diagnosticEventCounts = mutableMapOf<String, Int>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        FirebaseCrashlytics.getInstance().log("Accessibility service connected")
+        FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_connected", null)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
         // Clear a promoted notification left behind by an earlier service instance.
@@ -74,6 +80,11 @@ class TrackerAccessibilityService : AccessibilityService() {
                 }
                 appSessions.setPackages(tracked)
                 DetectionLog.add("watching ${tracked.joinToString { TrackedApps.label(it) }.ifEmpty { "no apps" }}")
+                FirebaseCrashlytics.getInstance().setCustomKey("tracked_app_count", tracked.size)
+                FirebaseCrashlytics.getInstance().log("Tracked app selection updated; count=${tracked.size}")
+                FirebaseAnalytics.getInstance(this@TrackerAccessibilityService).logEvent(
+                    "tracked_apps_configured", Bundle().apply { putInt("app_count", tracked.size) },
+                )
             }
         }
 
@@ -131,11 +142,33 @@ class TrackerAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (::appSessions.isInitialized) event.packageName?.let { appSessions.onAppEvent(it.toString()) }
+        val packageName = event.packageName?.toString()
+        if (::appSessions.isInitialized) packageName?.let { appSessions.onAppEvent(it) }
+        if (packageName != null && TrackedApps.packages.value.contains(packageName)) {
+            val count = (diagnosticEventCounts[packageName] ?: 0) + 1
+            diagnosticEventCounts[packageName] = count
+            if (count % 50 == 0) {
+                FirebaseCrashlytics.getInstance().setCustomKey("last_tracked_package", packageName)
+                FirebaseCrashlytics.getInstance().setCustomKey("last_accessibility_event_type", event.eventType)
+                FirebaseCrashlytics.getInstance().log("Received $count accessibility events from a tracked app; last type=${event.eventType}")
+                FirebaseAnalytics.getInstance(this).logEvent(
+                    "accessibility_events_batch", Bundle().apply {
+                        putString("tracked_package", packageName)
+                        putInt("event_count", 50)
+                        putInt("event_type", event.eventType)
+                    },
+                )
+            }
+        }
         for (tracker in TrackerRegistry.all) {
             val host = hosts[tracker.id] ?: continue
             if (event.eventType and tracker.eventTypes == 0) continue
-            tracker.onAccessibilityEvent(event, host)
+            try {
+                tracker.onAccessibilityEvent(event, host)
+            } catch (error: Exception) {
+                FirebaseCrashlytics.getInstance().log("Tracker ${tracker.id} failed on accessibility event type=${event.eventType}")
+                FirebaseCrashlytics.getInstance().recordException(error)
+            }
         }
     }
 
@@ -144,9 +177,14 @@ class TrackerAccessibilityService : AccessibilityService() {
         if (::overlay.isInitialized) overlay.onConfigurationChanged()
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+        FirebaseCrashlytics.getInstance().log("Accessibility service interrupted by system")
+        FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_interrupted", null)
+    }
 
     override fun onDestroy() {
+        FirebaseCrashlytics.getInstance().log("Accessibility service destroyed")
+        FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_destroyed", null)
         // Saves unsaved screen time (on the app scope, which outlives this service).
         if (::appSessions.isInitialized) appSessions.stop()
         if (::brain.isInitialized) brain.stop()

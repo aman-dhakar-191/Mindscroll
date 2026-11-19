@@ -2,6 +2,8 @@ package io.github.amandhakar.mindscroll
 
 import android.app.Application
 import android.content.Context
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import io.github.amandhakar.mindscroll.data.MetricsRepository
 import io.github.amandhakar.mindscroll.data.MindscrollDatabase
 import io.github.amandhakar.mindscroll.data.MoMemoryStore
@@ -29,6 +31,9 @@ class MindscrollApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val diagnosticsEnabled = settings.diagnosticsEnabled
+        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(diagnosticsEnabled)
+        FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(diagnosticsEnabled)
         CounterNotification.createChannels(this)
         TrackedApps.labeler = ::appLabel
         TrackedApps.set(settings.trackedApps)
