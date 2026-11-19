@@ -73,6 +73,8 @@ class CounterOverlay(
 
     private var state: CounterState? = null
     private var display = settings.display()
+    private var lastPokeAtMs = 0L
+    private var consecutivePokes = 0
 
     private var session: AppSession? = null
     private var lastSessionPackage: String? = null
@@ -99,13 +101,16 @@ class CounterOverlay(
     fun show(newState: CounterState, newDisplay: Settings.Display) {
         val grew = state != null && newState.total > (state?.total ?: 0)
         state = newState
+        val displayChanged = display != newDisplay
         display = newDisplay
 
         if (patchWanted()) {
             val views = patch ?: addPatch()?.also { patch = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
+                it.mo.idleMotion = display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
+                bindInfoMode(it)
                 layoutPatch(it, apply = true)
                 if (grew) bump(it.count, it.mo)
             }
@@ -117,6 +122,7 @@ class CounterOverlay(
             val views = bubble ?: addBubble()?.also { bubble = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
+                it.mo.idleMotion = display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
                 if (grew) bump(it.count, it.mo)
             }
@@ -253,8 +259,9 @@ class CounterOverlay(
         val camera = topCutout()
         val height = maxOf((camera?.height() ?: 0) + dp(12), dp(44))
 
+        val patchMoSize = patchMoSize()
         val mo = MoView(service).apply {
-            idleMotion = true
+            idleMotion = display.motionStyle != Settings.MotionStyle.CALM
             contentDescription = "Mo, tap to interact"
             setOnClickListener { poke(this) }
         }
@@ -275,7 +282,7 @@ class CounterOverlay(
         val left = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            addView(mo, LinearLayout.LayoutParams(dp(34), dp(34)))
+            addView(mo, LinearLayout.LayoutParams(patchMoSize, patchMoSize))
         }
         val info = ViewFlipper(service).apply {
             isAutoStart = true
@@ -425,9 +432,14 @@ class CounterOverlay(
      * Sizes the patch around the larger Mo and the single information slot.
      */
     private fun layoutPatch(views: PatchViews, apply: Boolean) {
+        val moSize = patchMoSize()
+        (views.left.getChildAt(0).layoutParams as LinearLayout.LayoutParams).apply {
+            width = moSize
+            height = moSize
+        }
         val timerWidth = views.timer.paint.measureText("00:00").toInt() + dp(12)
         val countWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(12)
-        val moWidth = dp(38)
+        val moWidth = moSize + dp(4)
         val infoWidth = if (display.infoMode == Settings.InfoMode.HIDDEN) 0 else when (display.infoMode) {
             Settings.InfoMode.TIMER -> timerWidth
             Settings.InfoMode.COUNTER -> countWidth
@@ -445,6 +457,24 @@ class CounterOverlay(
             runCatching { windowManager.updateViewLayout(views.root, views.params) }
         }
     }
+
+    private fun patchMoSize(): Int = dp(when (display.mascotSize) {
+        Settings.MascotSize.COMPACT -> 28
+        Settings.MascotSize.STANDARD -> 34
+        Settings.MascotSize.LARGE -> 40
+    })
+
+    private fun bubbleMoSize(): Int = dp(when (display.mascotSize) {
+        Settings.MascotSize.COMPACT -> 42
+        Settings.MascotSize.STANDARD -> 50
+        Settings.MascotSize.LARGE -> 58
+    })
+
+    private fun bubbleSize(): Int = dp(when (display.mascotSize) {
+        Settings.MascotSize.COMPACT -> 52
+        Settings.MascotSize.STANDARD -> 60
+        Settings.MascotSize.LARGE -> 70
+    })
 
     private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(14) else dp(8)
 
@@ -480,9 +510,10 @@ class CounterOverlay(
 
     @SuppressLint("ClickableViewAccessibility")
     private fun addBubble(): BubbleViews? {
-        val size = dp(60)
+        val size = bubbleSize()
+        val bubbleMoSize = bubbleMoSize()
         val mo = MoView(service).apply {
-            idleMotion = true
+            idleMotion = display.motionStyle != Settings.MotionStyle.CALM
             contentDescription = "Mo, tap to interact"
             setOnClickListener { poke(this) }
         }
@@ -500,7 +531,7 @@ class CounterOverlay(
             }
         }
         val root = FrameLayout(service).apply {
-            addView(mo, FrameLayout.LayoutParams(dp(50), dp(50), Gravity.CENTER))
+            addView(mo, FrameLayout.LayoutParams(bubbleMoSize, bubbleMoSize, Gravity.CENTER))
             addView(count, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, dp(20), Gravity.BOTTOM or Gravity.END))
             contentDescription = "Mindscroll bubble. Tap for details, drag to move."
         }
@@ -533,7 +564,13 @@ class CounterOverlay(
                     }
                 }
                 MotionEvent.ACTION_UP -> {
-                    if (dragging) settings.bubblePosition = params.x to params.y else togglePanel()
+                    if (dragging) {
+                        settings.bubblePosition = params.x to params.y
+                    } else {
+                        val hitMo = event.x >= mo.x && event.x <= mo.x + mo.width &&
+                            event.y >= mo.y && event.y <= mo.y + mo.height
+                        if (hitMo) poke(mo) else togglePanel()
+                    }
                 }
             }
             true
@@ -616,16 +653,27 @@ class CounterOverlay(
 
     /** A direct tap on Mo is a small interaction; the surrounding island still opens details. */
     private fun poke(mo: MoView) {
+        val now = SystemClock.uptimeMillis()
+        consecutivePokes = if (now - lastPokeAtMs <= 650L) consecutivePokes + 1 else 1
+        lastPokeAtMs = now
         if (mo.asleep) {
             mo.wakeUp()
         } else {
             mo.react()
             mo.animate().cancel()
-            mo.scaleX = 0.94f
-            mo.scaleY = 0.94f
+            val playful = display.motionStyle == Settings.MotionStyle.PLAYFUL
+            val repeated = consecutivePokes >= 3
+            val squash = when {
+                repeated && playful -> 0.78f
+                playful -> 0.88f
+                display.motionStyle == Settings.MotionStyle.CALM -> 0.97f
+                else -> 0.94f
+            }
+            mo.scaleX = squash
+            mo.scaleY = if (repeated && playful) 1.12f else squash
             mo.animate().scaleX(1f).scaleY(1f)
-                .setDuration(260)
-                .setInterpolator(OvershootInterpolator(2.5f))
+                .setDuration(if (display.motionStyle == Settings.MotionStyle.CALM) 180 else 300)
+                .setInterpolator(OvershootInterpolator(if (playful) 3.5f else 2f))
                 .start()
         }
     }
