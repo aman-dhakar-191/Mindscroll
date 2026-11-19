@@ -19,6 +19,8 @@ data class MoPose(
     val gazeX: Float = 0f,
     val gazeY: Float = 0f,
     val moodTransition: Float = 1f,
+    /** 0 = still, 1 = leaning out for a quick curious peek. */
+    val peek: Float = 0f,
 )
 
 /** Timing for Mo's animations, shared by the app (Compose) and the overlays (views). */
@@ -33,6 +35,7 @@ object MoMotion {
     private const val REACT_RISE_MS = 120L
     const val ANTICIPATION_MS = 90L
     const val MOOD_TRANSITION_MS = 420L
+    const val PEEK_MS = 680L
 
     fun phase(timeMs: Long): Float = (timeMs.mod(LOOP_MS)).toFloat() / LOOP_MS
 
@@ -72,6 +75,17 @@ object MoMotion {
         return kotlin.math.sin(t * Math.PI).toFloat()
     }
 
+    /** A quick lean-out, hold, and retreat when Mo notices a context change. */
+    fun peek(sincePeekMs: Long): Float {
+        if (sincePeekMs < 0 || sincePeekMs >= PEEK_MS) return 0f
+        val t = sincePeekMs.toFloat() / PEEK_MS
+        return when {
+            t < 0.28f -> smoothStep(t / 0.28f)
+            t < 0.62f -> 1f
+            else -> 1f - smoothStep((t - 0.62f) / 0.38f)
+        }
+    }
+
     /** Irregular gaps between blinks look alive; a fixed rhythm looks mechanical. */
     fun nextBlinkDelayMs(random: Random = Random): Long = 2200L + random.nextLong(3200L)
 
@@ -84,6 +98,7 @@ object MoMotion {
         wakeStartMs: Long? = null,
         mood: Mood = Mood.CHILL,
         moodChangedAtMs: Long? = null,
+        peekStartMs: Long? = null,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
         val sinceReact = reactStartMs?.let { timeMs - it }
@@ -114,6 +129,7 @@ object MoMotion {
             moodTransition = moodChangedAtMs?.let {
                 smoothStep(((timeMs - it).toFloat() / MOOD_TRANSITION_MS).coerceIn(0f, 1f))
             } ?: 1f,
+            peek = peekStartMs?.let { peek(timeMs - it) } ?: 0f,
         )
     }
 }
