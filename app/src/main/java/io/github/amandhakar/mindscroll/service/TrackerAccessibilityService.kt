@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import io.github.amandhakar.mindscroll.app
+import io.github.amandhakar.mindscroll.data.Settings as AppSettings
 import io.github.amandhakar.mindscroll.display.CounterNotification
 import io.github.amandhakar.mindscroll.display.CounterOverlay
 import io.github.amandhakar.mindscroll.display.AppStat
@@ -103,6 +104,7 @@ class TrackerAccessibilityService : AccessibilityService() {
                 .collect { (state, display) ->
                     CounterNotification.show(this@TrackerAccessibilityService, state)
                     overlay.show(state, display)
+                    updateLive(state, display)
                     CounterWidget.update(this@TrackerAccessibilityService, state)
                     brain.onCounter(state.total, state.mood)
                 }
@@ -116,6 +118,8 @@ class TrackerAccessibilityService : AccessibilityService() {
         scope.launch {
             var previous: AppSession? = null
             appSessions.session.collect { session ->
+                liveSession = session
+                lastState?.let { s -> lastDisplay?.let { d -> updateLive(s, d) } }
                 overlay.setSession(session)
                 brain.onSession(session)
                 // A new open (not the same session updating its timer): Mo may have something to say.
@@ -125,6 +129,21 @@ class TrackerAccessibilityService : AccessibilityService() {
                 previous = session
             }
         }
+    }
+
+    private var liveSession: AppSession? = null
+    private var lastState: CounterState? = null
+    private var lastDisplay: AppSettings.Display? = null
+
+    /** Shares the notch through a Live Update while a tracked app is open; else Mo's patch. */
+    private fun updateLive(state: CounterState, display: AppSettings.Display) {
+        lastState = state
+        lastDisplay = display
+        val session = liveSession
+        val shown = display.cameraPatch && display.shareNotch && session != null &&
+            CounterNotification.showLive(this, state, session, TrackedApps.label(session.packageName))
+        if (!shown) CounterNotification.cancelLive(this)
+        overlay.setLiveUpdate(shown)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
@@ -151,6 +170,7 @@ class TrackerAccessibilityService : AccessibilityService() {
         if (::scope.isInitialized) scope.cancel()
         if (::overlay.isInitialized) overlay.removeAll()
         CounterNotification.cancel(this)
+        CounterNotification.cancelLive(this)
         super.onDestroy()
     }
 

@@ -15,6 +15,9 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
+import io.github.amandhakar.mindscroll.service.AppSession
 import android.provider.Settings
 import io.github.amandhakar.mindscroll.R
 import io.github.amandhakar.mindscroll.data.Durations
@@ -33,6 +36,39 @@ object CounterNotification {
     private const val CHANNEL_STATUS = "status"
     private const val ID_COUNTER = 1
     private const val ID_OFF = 2
+    private const val ID_LIVE = 3
+
+    /**
+     * While a tracked app is in use: a Live Update (Android 16+) the system can show as a chip
+     * by the camera, taking turns with calls and other apps. Returns false where it can't.
+     */
+    fun showLive(context: Context, state: CounterState, session: AppSession, label: String): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.BAKLAVA || !canNotify(context)) return false
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (!manager.canPostPromotedNotifications()) return false
+        val elapsed = SystemClock.elapsedRealtime() - session.timerBase
+        val notification = Notification.Builder(context, CHANNEL_COUNTER)
+            .setSmallIcon(countIcon(context, state.total))
+            .setLargeIcon(moIcon(context, state))
+            .setContentTitle("$label · ${state.total} reels today")
+            .setContentText(state.line())
+            .setStyle(Notification.BigTextStyle().bigText(state.line()))
+            .setWhen(System.currentTimeMillis() - elapsed)
+            .setUsesChronometer(true)
+            .setShowWhen(true)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(openApp(context))
+            .addExtras(Bundle().apply { putBoolean(Notification.EXTRA_REQUEST_PROMOTED_ONGOING, true) })
+            .build()
+        if (!notification.hasPromotableCharacteristics()) return false
+        manager.notify(ID_LIVE, notification)
+        return true
+    }
+
+    fun cancelLive(context: Context) {
+        context.getSystemService(NotificationManager::class.java).cancel(ID_LIVE)
+    }
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)

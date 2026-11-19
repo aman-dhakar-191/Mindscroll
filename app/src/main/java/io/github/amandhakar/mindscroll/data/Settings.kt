@@ -16,8 +16,8 @@ class Settings(context: Context) {
     data class Display(
         val cameraPatch: Boolean,
         val bubble: Boolean,
-        /** Show the camera patch only while a tracked app is in use, out of other apps' way. */
-        val patchOnlyInApps: Boolean = true,
+        /** Share the notch: an Android Live Update chip instead of Mo's patch, where supported. */
+        val shareNotch: Boolean = true,
     )
 
     var onboardingDone: Boolean
@@ -32,9 +32,9 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_BUBBLE, false)
         set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
 
-    var patchOnlyInApps: Boolean
-        get() = prefs.getBoolean(KEY_PATCH_ONLY_IN_APPS, true)
-        set(value) = prefs.edit().putBoolean(KEY_PATCH_ONLY_IN_APPS, value).apply()
+    var shareNotch: Boolean
+        get() = prefs.getBoolean(KEY_SHARE_NOTCH, true)
+        set(value) = prefs.edit().putBoolean(KEY_SHARE_NOTCH, value).apply()
 
     /** Where the floating bubble was last dragged to, in px from the top-left. */
     var bubblePosition: Pair<Int, Int>
@@ -55,11 +55,11 @@ class Settings(context: Context) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.conflate()
 
-    fun display() = Display(cameraPatch, bubble, patchOnlyInApps)
+    fun display() = Display(cameraPatch, bubble, shareNotch)
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_PATCH_ONLY_IN_APPS) trySend(display())
+            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_SHARE_NOTCH) trySend(display())
         }
         trySend(display())
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -70,7 +70,7 @@ class Settings(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_CAMERA_PATCH = "camera_patch"
         const val KEY_BUBBLE = "bubble"
-        const val KEY_PATCH_ONLY_IN_APPS = "patch_only_in_apps"
+        const val KEY_SHARE_NOTCH = "share_notch"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"
