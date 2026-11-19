@@ -15,6 +15,10 @@ data class MoPose(
     val sleep: Float = 0f,
     /** Waking up: a big yawn and a stretch. */
     val yawn: Float = 0f,
+    val anticipation: Float = 0f,
+    val gazeX: Float = 0f,
+    val gazeY: Float = 0f,
+    val moodTransition: Float = 1f,
 )
 
 /** Timing for Mo's animations, shared by the app (Compose) and the overlays (views). */
@@ -27,6 +31,8 @@ object MoMotion {
     const val WAKE_MS = 1600L
     private const val EYES_OPEN_MS = 1100L
     private const val REACT_RISE_MS = 120L
+    const val ANTICIPATION_MS = 90L
+    const val MOOD_TRANSITION_MS = 420L
 
     fun phase(timeMs: Long): Float = (timeMs.mod(LOOP_MS)).toFloat() / LOOP_MS
 
@@ -76,18 +82,38 @@ object MoMotion {
         idle: Boolean,
         asleep: Boolean = false,
         wakeStartMs: Long? = null,
+        mood: Mood = Mood.CHILL,
+        moodChangedAtMs: Long? = null,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
+        val sinceReact = reactStartMs?.let { timeMs - it }
+        val loop = if (idle || asleep) phase(timeMs) else 0f
+        val glance = when (mood) {
+            Mood.CHILL -> 0.008f
+            Mood.CURIOUS -> 0.045f
+            Mood.WOBBLY -> 0.025f
+            Mood.DIZZY -> 0.06f
+            Mood.SLEEPY -> 0.012f
+        }
+        val anticipation = sinceReact?.let {
+            if (it in 0 until ANTICIPATION_MS) smoothStep(it.toFloat() / ANTICIPATION_MS) else 0f
+        } ?: 0f
         return MoPose(
-            phase = if (idle || asleep) phase(timeMs) else 0f,
+            phase = loop,
             blink = if (asleep) 0f else blinkStartMs?.let { blink(timeMs - it) } ?: 0f,
-            react = reactStartMs?.let { react(timeMs - it) } ?: 0f,
+            react = sinceReact?.let { react(it - ANTICIPATION_MS) } ?: 0f,
             sleep = when {
                 asleep -> 1f
                 sinceWake != null -> wakingSleep(sinceWake)
                 else -> 0f
             },
             yawn = sinceWake?.let { yawn(it) } ?: 0f,
+            anticipation = anticipation,
+            gazeX = if (idle && !asleep) kotlin.math.sin(loop * 2 * Math.PI).toFloat() * glance else 0f,
+            gazeY = if (idle && !asleep) kotlin.math.cos(loop * 4 * Math.PI).toFloat() * glance * 0.35f else 0f,
+            moodTransition = moodChangedAtMs?.let {
+                smoothStep(((timeMs - it).toFloat() / MOOD_TRANSITION_MS).coerceIn(0f, 1f))
+            } ?: 1f,
         )
     }
 }
