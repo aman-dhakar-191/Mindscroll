@@ -34,6 +34,33 @@ class MoMotionTest {
     }
 
     @Test
+    fun reactionHasAnticipationBeforeThePop() {
+        val anticipation = MoMotion.pose(1045, null, 1000, true)
+        assertTrue(anticipation.anticipation > 0f)
+        assertEquals(0f, anticipation.react, 0f)
+        val pop = MoMotion.pose(1120, null, 1000, true)
+        assertEquals(0f, pop.anticipation, 0f)
+        assertTrue(pop.react > 0f)
+    }
+
+    @Test
+    fun moodTransitionEasesToComplete() {
+        val start = MoMotion.pose(1000, null, null, true, moodChangedAtMs = 1000)
+        val middle = MoMotion.pose(1210, null, null, true, moodChangedAtMs = 1000)
+        val end = MoMotion.pose(1500, null, null, true, moodChangedAtMs = 1000)
+        assertEquals(0f, start.moodTransition, 0f)
+        assertTrue(middle.moodTransition in 0f..1f)
+        assertEquals(1f, end.moodTransition, 0f)
+    }
+
+    @Test
+    fun curiousMoodUsesMoreExpressiveEyeMovementThanChill() {
+        val chill = MoMotion.pose(900, null, null, true, mood = io.github.amandhakar.mindscroll.mascot.Mood.CHILL)
+        val curious = MoMotion.pose(900, null, null, true, mood = io.github.amandhakar.mindscroll.mascot.Mood.CURIOUS)
+        assertTrue(kotlin.math.abs(curious.gazeX) >= kotlin.math.abs(chill.gazeX))
+    }
+
+    @Test
     fun blinkGapsVaryWithinRange() {
         val random = Random(42)
         val gaps = List(50) { MoMotion.nextBlinkDelayMs(random) }
