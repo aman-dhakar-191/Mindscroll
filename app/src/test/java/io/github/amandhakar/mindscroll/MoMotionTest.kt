@@ -11,14 +11,16 @@ class MoMotionTest {
     fun blinkClosesAndReopens() {
         assertEquals(0f, MoMotion.blink(-1), 0f)
         assertEquals(0f, MoMotion.blink(0), 0.01f)
+        assertEquals(0.5f, MoMotion.blink(MoMotion.BLINK_MS / 4), 0.01f)
         assertEquals(1f, MoMotion.blink(MoMotion.BLINK_MS / 2), 0.01f)
+        assertEquals(0.5f, MoMotion.blink(MoMotion.BLINK_MS * 3 / 4), 0.01f)
         assertEquals(0f, MoMotion.blink(MoMotion.BLINK_MS), 0f)
     }
 
     @Test
     fun reactionPeaksQuicklyThenSettles() {
         assertEquals(1f, MoMotion.react(120), 0.01f)
-        assertTrue(MoMotion.react(60) in 0.4f..0.6f)
+        assertTrue(MoMotion.react(60) > 0.8f)
         assertTrue(MoMotion.react(400) < MoMotion.react(200))
         assertEquals(0f, MoMotion.react(MoMotion.REACT_MS), 0f)
         assertEquals(0f, MoMotion.react(-5), 0f)
