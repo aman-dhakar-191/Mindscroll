@@ -121,10 +121,9 @@ class CounterOverlay(
     }
 
     /**
-     * Whether the camera patch should be on screen. Android has no shared space around the
-     * camera that apps can take turns in, so the patch steps aside instead: outside tracked
-     * apps (by default), during calls, and while snoozed, Android's own call and timer chips
-     * there stay visible.
+     * Keep Mo's native patch visible for the full tracked-app session. It steps aside during
+     * calls and while snoozed, but does not hand its place to a system Live Update chip: that
+     * chip cannot render MoView, its animations, or the in-patch Chronometer.
      */
     private fun patchWanted(): Boolean =
         display.cameraPatch &&
