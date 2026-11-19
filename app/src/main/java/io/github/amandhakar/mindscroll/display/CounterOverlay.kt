@@ -75,11 +75,6 @@ class CounterOverlay(
     /** Long-pressing the patch hides it until this time (uptime ms). */
     private var snoozedUntil = 0L
     private val endSnooze = Runnable { refresh() }
-    /** A Live Update chip has the notch, so the patch stays away. */
-    private var liveShown = false
-    /** Mo's patch pops up until this time (uptime ms), then tucks away. */
-    private var peekUntil = 0L
-    private val endPeek = Runnable { refresh() }
 
     private class PatchViews(
         val root: LinearLayout,
@@ -126,34 +121,16 @@ class CounterOverlay(
     }
 
     /**
-     * Whether the camera patch should be on screen. Android has no shared space around the
-     * camera that apps can take turns in, so the patch steps aside instead: outside tracked
-     * apps (by default), during calls, and while snoozed, Android's own call and timer chips
-     * there stay visible.
+     * Keep Mo's native patch visible for the full tracked-app session. It steps aside during
+     * calls and while snoozed, but does not hand its place to a system Live Update chip: that
+     * chip cannot render MoView, its animations, or the in-patch Chronometer.
      */
     private fun patchWanted(): Boolean =
         display.cameraPatch &&
             isPortrait() &&
             !inCall &&
-            !liveShown &&
             SystemClock.uptimeMillis() >= snoozedUntil &&
-            session != null &&
-            (panel != null || SystemClock.uptimeMillis() < peekUntil)
-
-    /** Shows Mo's patch for [ms], then it tucks away. */
-    private fun peek(ms: Long) {
-        val now = SystemClock.uptimeMillis()
-        peekUntil = maxOf(peekUntil, now + ms)
-        handler.removeCallbacks(endPeek)
-        handler.postDelayed(endPeek, peekUntil - now)
-        refresh()
-    }
-
-    fun setLiveUpdate(shown: Boolean) {
-        if (shown == liveShown) return
-        liveShown = shown
-        refresh()
-    }
+            session != null
 
     /** Re-applies what's on screen after something that affects it changed. */
     private fun refresh() {
@@ -195,7 +172,6 @@ class CounterOverlay(
      */
     fun say(text: String): Boolean {
         if (panel != null) return false
-        if (patch == null) peek(SPEECH_MS + text.length * SPEECH_MS_PER_CHAR + 500)
         val patchViews = patch
         val bubbleViews = bubble
         val params = overlayParams(touchable = true)
@@ -256,7 +232,6 @@ class CounterOverlay(
 
     fun removeAll() {
         handler.removeCallbacks(endSnooze)
-        handler.removeCallbacks(endPeek)
         removeSpeech()
         removePatch(animate = false)
         bubble?.let { remove(it.root) }
@@ -341,9 +316,7 @@ class CounterOverlay(
     /** The app in use right now, or null. Shows or hides the live timer in the patch. */
     fun setSession(newSession: AppSession?) {
         if (newSession == session) return
-        val opened = newSession != null && newSession.startedAt != session?.startedAt
         session = newSession
-        if (opened) peek(PEEK_MS)
         patch?.let {
             bindSession(it)
             layoutPatch(it, apply = true)
@@ -622,7 +595,6 @@ class CounterOverlay(
         const val PANEL_TIMEOUT_MS = 10_000L
         const val PATCH_PADDING_DP = 8
         const val SNOOZE_MS = 60 * 60_000L
-        const val PEEK_MS = 8_000L
         /** How long a speech bubble stays up: a base plus reading time. */
         const val SPEECH_MS = 3_000L
         const val SPEECH_MS_PER_CHAR = 40L
