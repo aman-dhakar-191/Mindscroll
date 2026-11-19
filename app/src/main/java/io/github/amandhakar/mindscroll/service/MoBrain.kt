@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.MetricsRepository
 import io.github.amandhakar.mindscroll.data.MoMemoryStore
 import io.github.amandhakar.mindscroll.display.CounterOverlay
@@ -107,7 +108,11 @@ class MoBrain(
         lastTotal = total
         if (previous != null && total > previous) {
             sleep.onActivity(SystemClock.elapsedRealtime())?.let { slept -> wake(slept) }
-            speak(moments.onReel(System.currentTimeMillis(), total))
+            speak(moments.onReel(
+                System.currentTimeMillis(),
+                total,
+                includeMilestones = context.app.settings.milestoneReactions,
+            ))
         }
         speak(moments.onMood(System.currentTimeMillis(), mood))
     }
