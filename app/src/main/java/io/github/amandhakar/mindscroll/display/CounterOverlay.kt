@@ -34,6 +34,8 @@ import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
+import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.SessionReaction
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.service.AppSession
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
@@ -73,6 +75,9 @@ class CounterOverlay(
     private var display = Settings.Display(cameraPatch = false, bubble = false)
 
     private var session: AppSession? = null
+    private var lastSessionPackage: String? = null
+    private var lastSessionEndedAtMs: Long? = null
+    private var hasSeenSession = false
     private var inCall = false
     /** Long-pressing the patch hides it until this time (uptime ms). */
     private var snoozedUntil = 0L
@@ -329,13 +334,42 @@ class CounterOverlay(
     /** The app in use right now, or null. Shows or hides the live timer in the patch. */
     fun setSession(newSession: AppSession?) {
         if (newSession == session) return
-        val previousPackage = session?.packageName
+
+        val now = SystemClock.uptimeMillis()
+        val previousPackage = session?.packageName ?: lastSessionPackage
+        val reaction = MoMotion.sessionReaction(
+            previousPackage = previousPackage,
+            currentPackage = newSession?.packageName,
+            endedAtMs = lastSessionEndedAtMs,
+            nowMs = now,
+            hasSeenSession = hasSeenSession,
+        )
+
         session = newSession
-        // A different app/session is a new moment: Mo peeks out, then returns to idle.
-        if (newSession != null && newSession.packageName != previousPackage) {
-            patch?.mo?.peek()
-            bubble?.mo?.peek()
+        if (newSession == null) {
+            if (hasSeenSession) lastSessionEndedAtMs = now
+        } else {
+            lastSessionPackage = newSession.packageName
+            lastSessionEndedAtMs = null
+            hasSeenSession = true
+            // Each edge gets its own small gesture; no reaction on ordinary state refreshes.
+            when (reaction) {
+                SessionReaction.FIRST_ENTRY -> {
+                    patch?.mo?.peek()
+                    bubble?.mo?.peek()
+                }
+                SessionReaction.APP_SWITCH -> {
+                    patch?.mo?.react()
+                    bubble?.mo?.react()
+                }
+                SessionReaction.RETURN_AFTER_BREAK -> {
+                    patch?.mo?.wakeUp()
+                    bubble?.mo?.wakeUp()
+                }
+                SessionReaction.NONE -> Unit
+            }
         }
+
         patch?.let {
             bindSession(it)
             layoutPatch(it, apply = true)
