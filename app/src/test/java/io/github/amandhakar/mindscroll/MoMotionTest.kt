@@ -1,6 +1,7 @@
 package io.github.amandhakar.mindscroll
 
 import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.SessionReaction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -68,6 +69,51 @@ class MoMotionTest {
         assertEquals(1f, MoMotion.peek(MoMotion.PEEK_MS / 2), 0.01f)
         assertTrue(MoMotion.peek(600) in 0f..1f)
         assertEquals(0f, MoMotion.peek(MoMotion.PEEK_MS), 0f)
+    }
+
+
+    @Test
+    fun sessionTransitionsHaveDistinctReactions() {
+        assertEquals(
+            SessionReaction.FIRST_ENTRY,
+            MoMotion.sessionReaction(null, "com.example.a", null, 1_000L, false),
+        )
+        assertEquals(
+            SessionReaction.APP_SWITCH,
+            MoMotion.sessionReaction("com.example.a", "com.example.b", null, 2_000L, true),
+        )
+        assertEquals(
+            SessionReaction.RETURN_AFTER_BREAK,
+            MoMotion.sessionReaction(
+                "com.example.a",
+                "com.example.a",
+                1_000L,
+                1_000L + MoMotion.RETURN_BREAK_THRESHOLD_MS,
+                true,
+            ),
+        )
+    }
+
+    @Test
+    fun shortBreakDoesNotBecomeWelcomeBack() {
+        assertEquals(
+            SessionReaction.FIRST_ENTRY,
+            MoMotion.sessionReaction(
+                "com.example.a",
+                "com.example.a",
+                1_000L,
+                1_000L + MoMotion.RETURN_BREAK_THRESHOLD_MS - 1,
+                true,
+            ),
+        )
+    }
+
+    @Test
+    fun inactiveSessionHasNoReaction() {
+        assertEquals(
+            SessionReaction.NONE,
+            MoMotion.sessionReaction("com.example.a", null, 1_000L, 2_000L, true),
+        )
     }
 
     @Test
