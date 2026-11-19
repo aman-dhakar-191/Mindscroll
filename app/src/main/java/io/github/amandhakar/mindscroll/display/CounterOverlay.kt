@@ -70,6 +70,7 @@ class CounterOverlay(
     /** Called when a speech bubble goes away: tapped away (true) or after running its course. */
     var onSpeechEnded: ((dismissed: Boolean) -> Unit)? = null
     private var moAsleep = false
+    private var screenOn = true
 
     private var state: CounterState? = null
     private var display = settings.display()
@@ -108,7 +109,7 @@ class CounterOverlay(
             val views = patch ?: addPatch()?.also { patch = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
-                it.mo.idleMotion = display.motionStyle != Settings.MotionStyle.CALM
+                it.mo.idleMotion = screenOn && display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
                 bindInfoMode(it)
                 layoutPatch(it, apply = true)
@@ -122,7 +123,7 @@ class CounterOverlay(
             val views = bubble ?: addBubble()?.also { bubble = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
-                it.mo.idleMotion = display.motionStyle != Settings.MotionStyle.CALM
+                it.mo.idleMotion = screenOn && display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
                 if (displayChanged) {
                     val params = it.root.layoutParams as WindowManager.LayoutParams
@@ -173,6 +174,15 @@ class CounterOverlay(
         removePatch()
         closePanel()
         state?.let { show(it, display) }
+    }
+
+    /** Pause continuous mascot animation while the display is off to avoid needless work. */
+    fun setScreenOn(on: Boolean) {
+        if (screenOn == on) return
+        screenOn = on
+        val animate = on && display.motionStyle != Settings.MotionStyle.CALM
+        patch?.mo?.idleMotion = animate
+        bubble?.mo?.idleMotion = animate
     }
 
     /** Mo dozes off (true) or is put back to sleep; the patch and bubble show a sleeping Mo. */
