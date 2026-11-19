@@ -14,12 +14,17 @@ class Settings(context: Context) {
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     enum class InfoMode { TIMER, COUNTER, BOTH, HIDDEN }
+    enum class MascotSize { COMPACT, STANDARD, LARGE }
+    enum class MotionStyle { CALM, BALANCED, PLAYFUL }
 
     data class Display(
         val cameraPatch: Boolean,
         val bubble: Boolean,
         val infoMode: InfoMode,
         val autoScroll: Boolean,
+        val mascotSize: MascotSize,
+        val motionStyle: MotionStyle,
+        val milestoneReactions: Boolean,
     )
 
     var onboardingDone: Boolean
@@ -42,6 +47,20 @@ class Settings(context: Context) {
     var autoScroll: Boolean
         get() = prefs.getBoolean(KEY_AUTO_SCROLL, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_SCROLL, value).apply()
+
+    var mascotSize: MascotSize
+        get() = runCatching { MascotSize.valueOf(prefs.getString(KEY_MASCOT_SIZE, MascotSize.STANDARD.name)!!) }
+            .getOrDefault(MascotSize.STANDARD)
+        set(value) = prefs.edit().putString(KEY_MASCOT_SIZE, value.name).apply()
+
+    var motionStyle: MotionStyle
+        get() = runCatching { MotionStyle.valueOf(prefs.getString(KEY_MOTION_STYLE, MotionStyle.BALANCED.name)!!) }
+            .getOrDefault(MotionStyle.BALANCED)
+        set(value) = prefs.edit().putString(KEY_MOTION_STYLE, value.name).apply()
+
+    var milestoneReactions: Boolean
+        get() = prefs.getBoolean(KEY_MILESTONE_REACTIONS, true)
+        set(value) = prefs.edit().putBoolean(KEY_MILESTONE_REACTIONS, value).apply()
 
     /** Crash reports and technical accessibility-service diagnostics; enabled by default. */
     var diagnosticsEnabled: Boolean
@@ -67,11 +86,11 @@ class Settings(context: Context) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.conflate()
 
-    fun display() = Display(cameraPatch, bubble, infoMode, autoScroll)
+    fun display() = Display(cameraPatch, bubble, infoMode, autoScroll, mascotSize, motionStyle, milestoneReactions)
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL) trySend(display())
+            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS) trySend(display())
         }
         trySend(display())
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -85,6 +104,9 @@ class Settings(context: Context) {
         const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
         const val KEY_INFO_MODE = "info_mode"
         const val KEY_AUTO_SCROLL = "auto_scroll"
+        const val KEY_MASCOT_SIZE = "mascot_size"
+        const val KEY_MOTION_STYLE = "motion_style"
+        const val KEY_MILESTONE_REACTIONS = "milestone_reactions"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"
