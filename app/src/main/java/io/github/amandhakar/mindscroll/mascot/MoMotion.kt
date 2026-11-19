@@ -20,7 +20,7 @@ data class MoPose(
 /** Timing for Mo's animations, shared by the app (Compose) and the overlays (views). */
 object MoMotion {
     /** Length of one idle loop. */
-    const val LOOP_MS = 2600L
+    const val LOOP_MS = 3600L
     const val BLINK_MS = 180L
     const val REACT_MS = 750L
     /** Waking: eyes open over the first part, the yawn rises and falls over the whole. */
@@ -33,17 +33,24 @@ object MoMotion {
     /** Eyelids close and reopen over [BLINK_MS]. */
     fun blink(sinceBlinkMs: Long): Float {
         if (sinceBlinkMs < 0 || sinceBlinkMs >= BLINK_MS) return 0f
-        return 1f - abs(2f * sinceBlinkMs / BLINK_MS - 1f)
+        val t = sinceBlinkMs.toFloat() / BLINK_MS
+        val halfCycle = if (t < 0.5f) t * 2f else (1f - t) * 2f
+        return smoothStep(halfCycle)
     }
 
     /** A quick rise, then an eased settle over the rest of [REACT_MS]. */
     fun react(sinceReactMs: Long): Float {
         if (sinceReactMs < 0 || sinceReactMs >= REACT_MS) return 0f
-        if (sinceReactMs < REACT_RISE_MS) return sinceReactMs.toFloat() / REACT_RISE_MS
+        if (sinceReactMs < REACT_RISE_MS) {
+            val t = sinceReactMs.toFloat() / REACT_RISE_MS
+            return 1f - (1f - t) * (1f - t) * (1f - t)
+        }
         val t = (sinceReactMs - REACT_RISE_MS).toFloat() / (REACT_MS - REACT_RISE_MS)
         val eased = t * t * (3 - 2 * t)
         return 1f - eased
     }
+
+    private fun smoothStep(t: Float): Float = t * t * (3f - 2f * t)
 
     /** How asleep Mo still is, [sinceWakeMs] after starting to wake up. */
     fun wakingSleep(sinceWakeMs: Long): Float = when {
