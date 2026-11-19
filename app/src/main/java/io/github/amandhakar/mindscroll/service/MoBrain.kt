@@ -66,10 +66,14 @@ class MoBrain(
             val now = SystemClock.elapsedRealtime()
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
+                    overlay.setScreenOn(false)
                     sleep.onScreenOff(now)
                     publishSleep()
                 }
-                Intent.ACTION_SCREEN_ON -> sleep.onScreenOn(now)?.let { slept -> wake(slept) }
+                Intent.ACTION_SCREEN_ON -> {
+                    overlay.setScreenOn(true)
+                    sleep.onScreenOn(now)?.let { slept -> wake(slept) }
+                }
             }
         }
     }
