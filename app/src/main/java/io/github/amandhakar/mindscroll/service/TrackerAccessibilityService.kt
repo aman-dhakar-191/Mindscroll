@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import io.github.amandhakar.mindscroll.app
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import io.github.amandhakar.mindscroll.data.Settings as AppSettings
 import io.github.amandhakar.mindscroll.display.CounterNotification
 import io.github.amandhakar.mindscroll.display.CounterOverlay
@@ -46,6 +47,7 @@ class TrackerAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        FirebaseCrashlytics.getInstance().log("Accessibility tracker service connected")
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
         // Clear a promoted notification left behind by an earlier service instance.
@@ -135,7 +137,16 @@ class TrackerAccessibilityService : AccessibilityService() {
         for (tracker in TrackerRegistry.all) {
             val host = hosts[tracker.id] ?: continue
             if (event.eventType and tracker.eventTypes == 0) continue
-            tracker.onAccessibilityEvent(event, host)
+            try {
+                tracker.onAccessibilityEvent(event, host)
+            } catch (error: Exception) {
+                FirebaseCrashlytics.getInstance().apply {
+                    log("Tracker event handler failed: ${tracker.id}")
+                    setCustomKey("tracker_id", tracker.id)
+                    setCustomKey("accessibility_event_type", event.eventType)
+                    recordException(error)
+                }
+            }
         }
     }
 
@@ -144,9 +155,12 @@ class TrackerAccessibilityService : AccessibilityService() {
         if (::overlay.isInitialized) overlay.onConfigurationChanged()
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+        FirebaseCrashlytics.getInstance().log("Accessibility tracker service interrupted by system")
+    }
 
     override fun onDestroy() {
+        FirebaseCrashlytics.getInstance().log("Accessibility tracker service destroyed")
         // Saves unsaved screen time (on the app scope, which outlives this service).
         if (::appSessions.isInitialized) appSessions.stop()
         if (::brain.isInitialized) brain.stop()
