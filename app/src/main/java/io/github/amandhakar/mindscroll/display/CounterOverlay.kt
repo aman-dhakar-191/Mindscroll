@@ -93,6 +93,7 @@ class CounterOverlay(
             views?.let {
                 it.mo.mood = newState.mood
                 it.count.text = compact(newState.total)
+                layoutPatch(it, apply = true)
                 if (grew) bump(it.count, it.mo)
             }
         } else {
@@ -212,7 +213,7 @@ class CounterOverlay(
 
     private fun addPatch(): PatchViews? {
         val camera = topCutout()
-        val height = maxOf((camera?.height() ?: 0) + dp(8), dp(30))
+        val height = maxOf((camera?.height() ?: 0) + dp(10), dp(34))
 
         val mo = MoView(service)
         val timer = Chronometer(service).apply {
@@ -271,8 +272,10 @@ class CounterOverlay(
         layoutPatch(views, apply = false)
         if (!add(pill, params)) return null
         pill.alpha = 0f
-        pill.scaleX = 0.6f
-        pill.animate().alpha(1f).scaleX(1f).setDuration(250).setInterpolator(DecelerateInterpolator()).start()
+        pill.scaleX = 0.88f
+        pill.scaleY = 0.82f
+        pill.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(280).setInterpolator(OvershootInterpolator(0.8f)).start()
         return views
     }
 
@@ -312,7 +315,9 @@ class CounterOverlay(
         } else {
             0
         }
-        val side = dp(30) + timerWidth
+        val leftContentWidth = dp(22) + dp(4) + timerWidth
+        val countContentWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(8)
+        val side = maxOf(dp(36), leftContentWidth, countContentWidth)
         (views.left.layoutParams as LinearLayout.LayoutParams).width = side
         (views.count.layoutParams as LinearLayout.LayoutParams).width = side
         val width = 2 * dp(PATCH_PADDING_DP) + 2 * side + cameraGap(views.camera)
@@ -324,7 +329,7 @@ class CounterOverlay(
         }
     }
 
-    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(10) else dp(6)
+    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(14) else dp(8)
 
     private fun removePatch() {
         patch?.let {
@@ -518,9 +523,14 @@ class CounterOverlay(
 
     /** The front camera cutout at the top of the screen, if the phone has one and says where. */
     private fun topCutout(): Rect? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
         val cutout = defaultDisplay()?.cutout ?: return null
-        return cutout.boundingRects.firstOrNull { it.top < dp(48) && !it.isEmpty }
+        val topLimit = cutout.safeInsetTop + dp(8)
+        val screenCenter = screenWidth() / 2
+        return cutout.boundingRects
+            .asSequence()
+            .filter { !it.isEmpty && it.top <= topLimit }
+            .minByOrNull { abs(it.centerX() - screenCenter) }
     }
 
     private fun dp(value: Int): Int =
