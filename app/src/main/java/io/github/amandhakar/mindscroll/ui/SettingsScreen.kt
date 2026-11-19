@@ -57,7 +57,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             Text("Overlay display", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Card {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Information shown beside Mo", style = MaterialTheme.typography.bodyLarge)
+                    Text("Camera island information", style = MaterialTheme.typography.bodyLarge)
                     InfoChoice("Session timer only", infoMode == Settings.InfoMode.TIMER) {
                         infoMode = Settings.InfoMode.TIMER
                         settings.infoMode = infoMode
