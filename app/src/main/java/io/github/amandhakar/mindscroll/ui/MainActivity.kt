@@ -27,13 +27,17 @@ class MainActivity : ComponentActivity() {
                 var showLog by remember { mutableStateOf(false) }
                 var showApps by remember { mutableStateOf(false) }
                 var showMemories by remember { mutableStateOf(false) }
+                var showSettings by remember { mutableStateOf(false) }
 
                 // Permissions are granted in system screens; re-read them on the way back.
                 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
                     permissions = PermissionState.read(context)
                 }
 
-                if (showMemories) {
+                if (showSettings) {
+                    BackHandler { showSettings = false }
+                    SettingsScreen(onBack = { showSettings = false })
+                } else if (showMemories) {
                     BackHandler { showMemories = false }
                     MoMemoryScreen(onBack = { showMemories = false })
                 } else if (showApps) {
@@ -60,6 +64,7 @@ class MainActivity : ComponentActivity() {
                         onOpenLog = { showLog = true },
                         onOpenApps = { showApps = true },
                         onOpenMemories = { showMemories = true },
+                        onOpenSettings = { showSettings = true },
                     )
                 }
             }
