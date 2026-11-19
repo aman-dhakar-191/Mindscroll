@@ -144,7 +144,6 @@ fun HomeScreen(
             memory?.let { MemoryCard(MoMemory.insights(it)) }
             WeekCard(week)
             TrackedAppsCard(onOpenApps)
-            DisplayCard()
             DiagnosticsCard()
             MoCard(onOpenMemories)
 
