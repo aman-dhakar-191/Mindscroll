@@ -415,10 +415,12 @@ class CounterOverlay(
             return
         }
         val app = ReelApps.forPackage(current.packageName, TrackedApps.label(current.packageName))
+        val timerNeeded = display.infoMode == Settings.InfoMode.TIMER ||
+            (display.infoMode == Settings.InfoMode.BOTH && display.autoScroll)
         views.timer.base = current.timerBase
         views.timer.setTextColor(app.accent.toInt())
-        views.timer.visibility = View.VISIBLE
-        views.timer.start()
+        views.timer.visibility = if (timerNeeded) View.VISIBLE else View.GONE
+        if (timerNeeded) views.timer.start() else views.timer.stop()
         bindInfoMode(views)
         views.root.contentDescription = "Mindscroll: time in ${app.label} and today's reels. Tap for details."
     }
@@ -461,7 +463,7 @@ class CounterOverlay(
         val countWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(12)
         val moWidth = moSize + dp(4)
         val infoWidth = if (display.infoMode == Settings.InfoMode.HIDDEN) 0 else when (display.infoMode) {
-            Settings.InfoMode.TIMER -> timerWidth
+            Settings.InfoMode.TIMER -> if (session == null) 0 else timerWidth
             Settings.InfoMode.COUNTER -> countWidth
             Settings.InfoMode.BOTH -> maxOf(dp(58), timerWidth, countWidth)
             Settings.InfoMode.HIDDEN -> 0
