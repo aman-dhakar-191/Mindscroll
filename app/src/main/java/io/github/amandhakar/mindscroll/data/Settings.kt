@@ -30,6 +30,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_BUBBLE, false)
         set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
 
+    /** Crash diagnostics are enabled by default; users can disable uploads in settings. */
+    var crashReportingEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CRASH_REPORTING_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_CRASH_REPORTING_ENABLED, value).apply()
+
     /** Where the floating bubble was last dragged to, in px from the top-left. */
     var bubblePosition: Pair<Int, Int>
         get() = prefs.getInt(KEY_BUBBLE_X, 24) to prefs.getInt(KEY_BUBBLE_Y, 400)
@@ -64,6 +69,7 @@ class Settings(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_CAMERA_PATCH = "camera_patch"
         const val KEY_BUBBLE = "bubble"
+        const val KEY_CRASH_REPORTING_ENABLED = "crash_reporting_enabled"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"
