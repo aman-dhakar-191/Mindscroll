@@ -47,15 +47,17 @@ object MoPainter {
         // Whole-body motion, pivoting on the bottom middle.
         val pivotX = s * 0.5f
         val pivotY = s * 0.94f
+        // A tiny vertical drift makes breathing feel less like a scale transform.
+        canvas.translate(0f, -s * 0.008f * wave)
         when {
             // Asleep: slow, deep breaths whatever the mood.
             asleep -> canvas.scale(1 + 0.04f * wave, 1 - 0.04f * wave, pivotX, pivotY)
             // Waking: a big stretch, tall and thin.
             pose.yawn > 0f -> canvas.scale(1 - 0.06f * pose.yawn, 1 + 0.1f * pose.yawn, pivotX, pivotY)
             else -> when (mood) {
-                Mood.CHILL -> canvas.scale(1 + 0.025f * wave, 1 - 0.025f * wave, pivotX, pivotY) // breathing
-                Mood.WOBBLY -> canvas.rotate(6f * wave, pivotX, pivotY) // swaying
-                Mood.SLEEPY -> canvas.rotate(3f * wave, pivotX, pivotY) // nodding off
+                Mood.CHILL -> canvas.scale(1 + 0.018f * wave, 1 - 0.022f * wave, pivotX, pivotY) // soft breathing
+                Mood.WOBBLY -> canvas.rotate(4f * wave, pivotX, pivotY) // gentle, slower sway
+                Mood.SLEEPY -> canvas.rotate(2.2f * wave, pivotX, pivotY) // sleepy nod
                 else -> Unit
             }
         }
@@ -252,8 +254,8 @@ object MoPainter {
 
 /**
  * Mo as a plain View, for overlay windows. Blinks now and then and reacts to [react]. With
- * [idleMotion] it also plays the mood's idle loop; leave it off for always-on overlays like the
- * camera patch, which then only redraw during a blink or a reaction.
+ * [idleMotion] it also plays the mood's idle loop. The loop is deliberately subtle and runs
+ * at a capped 30 fps so the small camera-patch character feels alive without a 60 fps redraw.
  */
 class MoView @JvmOverloads constructor(
     context: Context,
@@ -335,7 +337,7 @@ class MoView @JvmOverloads constructor(
     }
 
     private companion object {
-        /** Idle motion is slow; ~20 fps is smooth enough and much cheaper than 60. */
-        const val IDLE_FRAME_MS = 50L
+        /** Cap continuous idle redraws at ~30 fps; event animations still use display frames. */
+        const val IDLE_FRAME_MS = 33L
     }
 }
