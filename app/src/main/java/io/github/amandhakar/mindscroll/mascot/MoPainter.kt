@@ -69,7 +69,8 @@ object MoPainter {
                 Mood.CHILL -> canvas.scale(1 + 0.018f * wave, 1 - 0.022f * wave, pivotX, pivotY) // soft breathing
                 Mood.WOBBLY -> canvas.rotate(4f * wave, pivotX, pivotY) // gentle, slower sway
                 Mood.SLEEPY -> canvas.rotate(2.2f * wave, pivotX, pivotY) // sleepy nod
-                else -> Unit
+                Mood.CURIOUS -> canvas.rotate(1.2f * wave, pivotX, pivotY) // attentive little tilt
+                Mood.DIZZY -> canvas.rotate(2.8f * wave, pivotX, pivotY) // gently unsteady
             }
         }
         // A tiny crouch immediately before the pop makes reactions feel anticipated.
@@ -352,7 +353,7 @@ class MoView @JvmOverloads constructor(
         MoPainter.draw(canvas, size, mood, (width - size) / 2, (height - size) / 2, pose, previousMoodColor)
 
         val blinking = blinkStart?.let { now - it < MoMotion.BLINK_MS } ?: false
-        val reacting = reactStart?.let { now - it < MoMotion.REACT_MS } ?: false
+        val reacting = reactStart?.let { now - it < MoMotion.REACT_MS + MoMotion.ANTICIPATION_MS } ?: false
         val waking = wakeStart?.let { now - it < MoMotion.WAKE_MS } ?: false
         val changingMood = moodChangedAt?.let { now - it < MoMotion.MOOD_TRANSITION_MS } ?: false
         when {
