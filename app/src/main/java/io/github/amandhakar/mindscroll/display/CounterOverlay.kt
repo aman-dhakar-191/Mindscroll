@@ -245,7 +245,7 @@ class CounterOverlay(
         val camera = topCutout()
         val height = maxOf((camera?.height() ?: 0) + dp(10), dp(34))
 
-        val mo = MoView(service)
+        val mo = MoView(service).apply { idleMotion = true }
         val timer = Chronometer(service).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
@@ -399,7 +399,7 @@ class CounterOverlay(
     @SuppressLint("ClickableViewAccessibility")
     private fun addBubble(): BubbleViews? {
         val size = dp(60)
-        val mo = MoView(service)
+        val mo = MoView(service).apply { idleMotion = true }
         val count = TextView(service).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
