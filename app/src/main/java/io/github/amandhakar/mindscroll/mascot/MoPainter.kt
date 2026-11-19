@@ -20,6 +20,7 @@ import kotlin.math.sin
  */
 object MoPainter {
     private val INK = 0xFF1B1B2F.toInt()
+    private val colorEvaluator = android.animation.ArgbEvaluator()
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -31,9 +32,19 @@ object MoPainter {
     private val rect = RectF()
 
     /** Draws Mo filling a [size] × [size] square at ([left], [top]). Main thread only. */
-    fun draw(canvas: Canvas, size: Float, mood: Mood, left: Float = 0f, top: Float = 0f, pose: MoPose = MoPose()) {
+    fun draw(
+        canvas: Canvas,
+        size: Float,
+        mood: Mood,
+        left: Float = 0f,
+        top: Float = 0f,
+        pose: MoPose = MoPose(),
+        previousMoodColor: Int = mood.color.toInt(),
+    ) {
         val s = size
-        val body = mood.color.toInt()
+        val body = if (pose.moodTransition < 1f) {
+            colorEvaluator.evaluate(pose.moodTransition, previousMoodColor, mood.color.toInt()) as Int
+        } else mood.color.toInt()
         val wave = sin(pose.phase * 2 * PI).toFloat()
         val asleep = pose.sleep > 0.5f
         val yawning = !asleep && pose.yawn > 0.25f
@@ -44,23 +55,42 @@ object MoPainter {
         canvas.save()
         canvas.translate(left, top)
 
+        // A small lean-out makes Mo look around the edge before settling back in.
+        if (pose.peek > 0f) {
+            canvas.translate(s * 0.12f * pose.peek, 0f)
+        }
         // Whole-body motion, pivoting on the bottom middle.
         val pivotX = s * 0.5f
         val pivotY = s * 0.94f
+        // A tiny vertical drift makes breathing feel less like a scale transform.
+        canvas.translate(0f, -s * 0.008f * wave)
         when {
             // Asleep: slow, deep breaths whatever the mood.
             asleep -> canvas.scale(1 + 0.04f * wave, 1 - 0.04f * wave, pivotX, pivotY)
             // Waking: a big stretch, tall and thin.
             pose.yawn > 0f -> canvas.scale(1 - 0.06f * pose.yawn, 1 + 0.1f * pose.yawn, pivotX, pivotY)
             else -> when (mood) {
-                Mood.CHILL -> canvas.scale(1 + 0.025f * wave, 1 - 0.025f * wave, pivotX, pivotY) // breathing
-                Mood.WOBBLY -> canvas.rotate(6f * wave, pivotX, pivotY) // swaying
-                Mood.SLEEPY -> canvas.rotate(3f * wave, pivotX, pivotY) // nodding off
-                else -> Unit
+                Mood.CHILL -> canvas.scale(1 + 0.018f * wave, 1 - 0.022f * wave, pivotX, pivotY) // soft breathing
+                Mood.WOBBLY -> canvas.rotate(4f * wave, pivotX, pivotY) // gentle, slower sway
+                Mood.SLEEPY -> canvas.rotate(2.2f * wave, pivotX, pivotY) // sleepy nod
+                Mood.CURIOUS -> canvas.rotate(1.2f * wave, pivotX, pivotY) // attentive little tilt
+                Mood.DIZZY -> canvas.rotate(2.8f * wave, pivotX, pivotY) // gently unsteady
             }
+        }
+        // A tiny crouch immediately before the pop makes reactions feel anticipated.
+        if (pose.peek > 0f) {
+            canvas.rotate(-7f * pose.peek, pivotX, pivotY)
+        }
+        if (pose.anticipation > 0f) {
+            canvas.scale(1 - 0.035f * pose.anticipation, 1 + 0.045f * pose.anticipation, pivotX, pivotY)
         }
         // Surprise: squash down and spread out, like landing a hop.
         if (surprised) canvas.scale(1 + 0.1f * pose.react, 1 - 0.14f * pose.react, pivotX, pivotY)
+        // Mood changes settle with a small, soft bounce rather than snapping instantly.
+        if (pose.moodTransition < 1f) {
+            val settle = kotlin.math.sin((1f - pose.moodTransition) * Math.PI).toFloat()
+            canvas.scale(1f + 0.018f * settle, 1f - 0.018f * settle, pivotX, pivotY)
+        }
 
         // The curl on top: a little scroll, as in "scroll". It perks up on surprise.
         stroke.color = body
@@ -110,9 +140,9 @@ object MoPainter {
                 canvas.drawArc(rect, 200f, 140f, false, stroke)
             }
             // Glancing left and right.
-            Mood.CURIOUS -> eyes.forEach { x -> dotEye(canvas, x + s * 0.025f * wave, eyeY, s * 0.065f, blink) }
+            Mood.CURIOUS -> eyes.forEach { x -> dotEye(canvas, x + s * (0.025f * wave + pose.gazeX), eyeY + s * pose.gazeY, s * 0.065f, blink) }
             Mood.WOBBLY -> eyes.forEachIndexed { i, x ->
-                dotEye(canvas, x, eyeY + s * 0.01f, s * 0.055f, blink)
+                dotEye(canvas, x + s * pose.gazeX, eyeY + s * (0.01f + pose.gazeY), s * 0.055f, blink)
                 // Worried brows, tilted up toward the middle, twitching with the sway.
                 val inner = if (i == 0) 1 else -1
                 val lift = s * 0.01f * wave
@@ -126,7 +156,7 @@ object MoPainter {
                 val turn = pose.phase * 360f * if (i == 0) 1 else -1
                 canvas.save()
                 canvas.rotate(turn, x, eyeY)
-                spiral(canvas, x, eyeY, s * 0.085f)
+                spiral(canvas, x + s * pose.gazeX, eyeY + s * pose.gazeY, s * 0.085f)
                 canvas.restore()
             }
             Mood.SLEEPY -> eyes.forEach { x -> // heavy lids that droop further as Mo nods
@@ -252,8 +282,8 @@ object MoPainter {
 
 /**
  * Mo as a plain View, for overlay windows. Blinks now and then and reacts to [react]. With
- * [idleMotion] it also plays the mood's idle loop; leave it off for always-on overlays like the
- * camera patch, which then only redraw during a blink or a reaction.
+ * [idleMotion] it also plays the mood's idle loop. The loop is deliberately subtle and runs
+ * at a capped 30 fps so the small camera-patch character feels alive without a 60 fps redraw.
  */
 class MoView @JvmOverloads constructor(
     context: Context,
@@ -262,7 +292,9 @@ class MoView @JvmOverloads constructor(
     var mood: Mood = Mood.CHILL
         set(value) {
             if (field != value) {
+                previousMoodColor = field.color.toInt()
                 field = value
+                moodChangedAt = SystemClock.uptimeMillis()
                 invalidate()
             }
         }
@@ -286,6 +318,9 @@ class MoView @JvmOverloads constructor(
     private var blinkStart: Long? = null
     private var reactStart: Long? = null
     private var wakeStart: Long? = null
+    private var moodChangedAt: Long? = null
+    private var peekStart: Long? = null
+    private var previousMoodColor: Int = mood.color.toInt()
 
     private val blinker = object : Runnable {
         override fun run() {
@@ -298,6 +333,12 @@ class MoView @JvmOverloads constructor(
     /** A new reel counted: Mo looks surprised for a moment. */
     fun react() {
         reactStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    /** Mo leans out briefly, as if noticing a change nearby. */
+    fun peek() {
+        peekStart = SystemClock.uptimeMillis()
         invalidate()
     }
 
@@ -322,20 +363,22 @@ class MoView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         val now = SystemClock.uptimeMillis()
         val size = minOf(width, height).toFloat()
-        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart)
-        MoPainter.draw(canvas, size, mood, (width - size) / 2, (height - size) / 2, pose)
+        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart, mood, moodChangedAt, peekStart)
+        MoPainter.draw(canvas, size, mood, (width - size) / 2, (height - size) / 2, pose, previousMoodColor)
 
         val blinking = blinkStart?.let { now - it < MoMotion.BLINK_MS } ?: false
-        val reacting = reactStart?.let { now - it < MoMotion.REACT_MS } ?: false
+        val reacting = reactStart?.let { now - it < MoMotion.REACT_MS + MoMotion.ANTICIPATION_MS } ?: false
         val waking = wakeStart?.let { now - it < MoMotion.WAKE_MS } ?: false
+        val changingMood = moodChangedAt?.let { now - it < MoMotion.MOOD_TRANSITION_MS } ?: false
+        val peeking = peekStart?.let { now - it < MoMotion.PEEK_MS } ?: false
         when {
-            blinking || reacting || waking -> postInvalidateOnAnimation()
+            blinking || reacting || waking || changingMood || peeking -> postInvalidateOnAnimation()
             idleMotion -> postInvalidateDelayed(IDLE_FRAME_MS)
         }
     }
 
     private companion object {
-        /** Idle motion is slow; ~20 fps is smooth enough and much cheaper than 60. */
-        const val IDLE_FRAME_MS = 50L
+        /** Cap continuous idle redraws at ~30 fps; event animations still use display frames. */
+        const val IDLE_FRAME_MS = 33L
     }
 }
