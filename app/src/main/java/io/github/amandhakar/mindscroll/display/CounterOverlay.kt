@@ -281,7 +281,7 @@ class CounterOverlay(
 
         val patchMoSize = patchMoSize()
         val mo = MoView(service).apply {
-            idleMotion = display.motionStyle != Settings.MotionStyle.CALM
+            idleMotion = this@CounterOverlay.display.motionStyle != Settings.MotionStyle.CALM
             contentDescription = "Mo, tap to interact"
             setOnClickListener { poke(this) }
         }
@@ -535,7 +535,7 @@ class CounterOverlay(
         val size = bubbleSize()
         val bubbleMoSize = bubbleMoSize()
         val mo = MoView(service).apply {
-            idleMotion = display.motionStyle != Settings.MotionStyle.CALM
+            idleMotion = this@CounterOverlay.display.motionStyle != Settings.MotionStyle.CALM
             contentDescription = "Mo, tap to interact"
             setOnClickListener { poke(this) }
         }
