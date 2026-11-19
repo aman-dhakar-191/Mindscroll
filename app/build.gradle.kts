@@ -11,12 +11,12 @@ val appVersionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
 
 android {
     namespace = "io.github.amandhakar.mindscroll"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.amandhakar.mindscroll"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
     }

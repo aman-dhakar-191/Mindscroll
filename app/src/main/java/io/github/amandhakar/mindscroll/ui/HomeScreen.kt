@@ -253,12 +253,28 @@ private fun DisplayCard() {
     val settings = LocalContext.current.app.settings
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
+    var shareNotch by remember { mutableStateOf(settings.shareNotch) }
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("On screen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ToggleRow("Camera patch", "Mo and today's count around the front camera. Tap it for details.", cameraPatch) {
+            ToggleRow(
+                "Around the camera",
+                "While you're in a tracked app: the timer and today's count. Long-press Mo to hide for an hour.",
+                cameraPatch,
+            ) {
                 cameraPatch = it
                 settings.cameraPatch = it
+            }
+            if (cameraPatch) {
+                ToggleRow(
+                    "Share the notch with other apps",
+                    "Android shows it as a Live Update chip, taking turns with calls, timers and deliveries. " +
+                        "Off (or on phones before Android 16): Mo pops up for a few seconds instead.",
+                    shareNotch,
+                ) {
+                    shareNotch = it
+                    settings.shareNotch = it
+                }
             }
             ToggleRow("Floating bubble", "Mo with a count badge. Drag it anywhere, tap for details.", bubble) {
                 bubble = it
