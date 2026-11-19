@@ -2,6 +2,7 @@ package io.github.amandhakar.mindscroll
 
 import android.app.Application
 import android.content.Context
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import io.github.amandhakar.mindscroll.data.MetricsRepository
 import io.github.amandhakar.mindscroll.data.MindscrollDatabase
 import io.github.amandhakar.mindscroll.data.MoMemoryStore
@@ -29,6 +30,8 @@ class MindscrollApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Apply the user's persisted preference before the rest of the app starts.
+        FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(settings.crashReportingEnabled)
         CounterNotification.createChannels(this)
         TrackedApps.labeler = ::appLabel
         TrackedApps.set(settings.trackedApps)
