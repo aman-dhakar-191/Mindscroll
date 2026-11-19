@@ -72,7 +72,7 @@ class CounterOverlay(
     private var moAsleep = false
 
     private var state: CounterState? = null
-    private var display = Settings.Display(cameraPatch = false, bubble = false)
+    private var display = settings.display()
 
     private var session: AppSession? = null
     private var lastSessionPackage: String? = null
@@ -383,8 +383,7 @@ class CounterOverlay(
         if (current == null) {
             views.timer.stop()
             views.timer.visibility = View.GONE
-            views.info.stopFlipping()
-            views.info.displayedChild = 0
+            bindInfoMode(views)
             views.root.contentDescription = "Mindscroll: today's reels. Tap for details."
             return
         }
@@ -393,18 +392,48 @@ class CounterOverlay(
         views.timer.setTextColor(app.accent.toInt())
         views.timer.visibility = View.VISIBLE
         views.timer.start()
-        views.info.startFlipping()
+        bindInfoMode(views)
         views.root.contentDescription = "Mindscroll: time in ${app.label} and today's reels. Tap for details."
     }
 
+    private fun bindInfoMode(views: PatchViews) {
+        when (display.infoMode) {
+            Settings.InfoMode.TIMER -> {
+                views.info.visibility = if (session == null) View.GONE else View.VISIBLE
+                views.info.stopFlipping()
+                views.info.displayedChild = 1
+            }
+            Settings.InfoMode.COUNTER -> {
+                views.info.visibility = View.VISIBLE
+                views.info.stopFlipping()
+                views.info.displayedChild = 0
+            }
+            Settings.InfoMode.BOTH -> {
+                views.info.visibility = View.VISIBLE
+                views.info.displayedChild = 0
+                if (display.autoScroll && session != null) views.info.startFlipping()
+                else views.info.stopFlipping()
+            }
+            Settings.InfoMode.HIDDEN -> {
+                views.info.stopFlipping()
+                views.info.visibility = View.GONE
+            }
+        }
+    }
+
     /**
-     * Sizes the patch around the larger Mo and the single vertically-flipping information slot.
+     * Sizes the patch around the larger Mo and the single information slot.
      */
     private fun layoutPatch(views: PatchViews, apply: Boolean) {
         val timerWidth = views.timer.paint.measureText("00:00").toInt() + dp(12)
         val countWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(12)
         val moWidth = dp(38)
-        val infoWidth = maxOf(dp(58), timerWidth, countWidth)
+        val infoWidth = if (display.infoMode == Settings.InfoMode.HIDDEN) 0 else when (display.infoMode) {
+            Settings.InfoMode.TIMER -> timerWidth
+            Settings.InfoMode.COUNTER -> countWidth
+            Settings.InfoMode.BOTH -> maxOf(dp(58), timerWidth, countWidth)
+            Settings.InfoMode.HIDDEN -> 0
+        }
         (views.left.layoutParams as LinearLayout.LayoutParams).width = moWidth
         (views.info.layoutParams as LinearLayout.LayoutParams).width = infoWidth
         val width = 2 * dp(PATCH_PADDING_DP) + moWidth + infoWidth + cameraGap(views.camera)
