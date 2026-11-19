@@ -124,6 +124,16 @@ class CounterOverlay(
                 it.mo.mood = newState.mood
                 it.mo.idleMotion = display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
+                if (displayChanged) {
+                    val params = it.root.layoutParams as WindowManager.LayoutParams
+                    params.width = bubbleSize()
+                    params.height = bubbleSize()
+                    (it.mo.layoutParams as FrameLayout.LayoutParams).apply {
+                        width = bubbleMoSize()
+                        height = bubbleMoSize()
+                    }
+                    runCatching { windowManager.updateViewLayout(it.root, params) }
+                }
                 if (grew) bump(it.count, it.mo)
             }
         } else {
