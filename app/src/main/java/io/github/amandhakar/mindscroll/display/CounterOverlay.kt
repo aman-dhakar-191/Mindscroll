@@ -22,11 +22,13 @@ import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.TranslateAnimation
 import android.view.animation.OvershootInterpolator
 import android.widget.Chronometer
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ViewFlipper
 import android.widget.Toast
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
@@ -82,6 +84,7 @@ class CounterOverlay(
         val mo: MoView,
         val timer: Chronometer,
         val count: TextView,
+        val info: ViewFlipper,
         val params: WindowManager.LayoutParams,
         val camera: Rect?,
         val bottomY: Int,
@@ -243,23 +246,15 @@ class CounterOverlay(
 
     private fun addPatch(): PatchViews? {
         val camera = topCutout()
-        val height = maxOf((camera?.height() ?: 0) + dp(10), dp(34))
+        val height = maxOf((camera?.height() ?: 0) + dp(12), dp(44))
 
         val mo = MoView(service).apply { idleMotion = true }
         val timer = Chronometer(service).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            gravity = Gravity.CENTER_VERTICAL
-            maxLines = 1
-            visibility = View.GONE
-        }
-        val left = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            addView(mo, LinearLayout.LayoutParams(dp(22), dp(22)))
-            addView(timer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.MATCH_PARENT).apply {
-                marginStart = dp(4)
-            })
+            maxLines = 1
+            visibility = View.VISIBLE
         }
         val count = TextView(service).apply {
             setTextColor(Color.WHITE)
@@ -267,6 +262,20 @@ class CounterOverlay(
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             gravity = Gravity.CENTER
             maxLines = 1
+        }
+        val left = LinearLayout(service).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(mo, LinearLayout.LayoutParams(dp(34), dp(34)))
+        }
+        val info = ViewFlipper(service).apply {
+            isAutoStart = true
+            flipInterval = INFO_FLIP_MS
+            inAnimation = TranslateAnimation(0f, 0f, dp(18).toFloat(), 0f).apply { duration = 260 }
+            outAnimation = TranslateAnimation(0f, 0f, 0f, -dp(18).toFloat()).apply { duration = 220 }
+            addView(count, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            addView(timer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            displayedChild = 0
         }
         val pill = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -276,11 +285,11 @@ class CounterOverlay(
                 cornerRadius = height / 2f
             }
             setPadding(dp(PATCH_PADDING_DP), 0, dp(PATCH_PADDING_DP), 0)
-            // With a camera hole, the two sides sit either side of it, island style.
+            // Mo occupies one side; the reel count and session timer share the other.
             addView(left, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
             addView(View(service), LinearLayout.LayoutParams(cameraGap(camera), 1))
-            addView(count, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
-            contentDescription = "Mindscroll: today's reels. Tap for details, long-press to hide for an hour."
+            addView(info, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT))
+            contentDescription = "Mindscroll: today's reels and current session time. Tap for details, long-press to hide for an hour."
             setOnClickListener { togglePanel() }
             setOnLongClickListener {
                 snooze()
@@ -293,7 +302,7 @@ class CounterOverlay(
             gravity = Gravity.TOP or Gravity.START
             y = if (camera != null) maxOf(0, camera.centerY() - height / 2) else dp(4)
         }
-        val views = PatchViews(pill, left, mo, timer, count, params, camera, bottomY = params.y + height)
+        val views = PatchViews(pill, left, mo, timer, count, info, params, camera, bottomY = params.y + height)
         bindSession(views)
         // A longer time (59:59 → 1:00:00) needs a wider island.
         var lastLength = 0
@@ -330,6 +339,8 @@ class CounterOverlay(
         if (current == null) {
             views.timer.stop()
             views.timer.visibility = View.GONE
+            views.info.stopFlipping()
+            views.info.displayedChild = 0
             views.root.contentDescription = "Mindscroll: today's reels. Tap for details."
             return
         }
@@ -338,6 +349,7 @@ class CounterOverlay(
         views.timer.setTextColor(app.accent.toInt())
         views.timer.visibility = View.VISIBLE
         views.timer.start()
+        views.info.startFlipping()
         views.root.contentDescription = "Mindscroll: time in ${app.label} and today's reels. Tap for details."
     }
 
@@ -346,21 +358,18 @@ class CounterOverlay(
      * centered in it, with room for the timer when it's showing.
      */
     private fun layoutPatch(views: PatchViews, apply: Boolean) {
-        val timerWidth = if (views.timer.visibility == View.VISIBLE) {
-            views.timer.paint.measureText(views.timer.text.toString()).toInt() + dp(6)
-        } else {
-            0
-        }
-        val leftContentWidth = dp(22) + dp(4) + timerWidth
-        val countContentWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(8)
-        val side = maxOf(dp(36), leftContentWidth, countContentWidth)
-        (views.left.layoutParams as LinearLayout.LayoutParams).width = side
-        (views.count.layoutParams as LinearLayout.LayoutParams).width = side
-        val width = 2 * dp(PATCH_PADDING_DP) + 2 * side + cameraGap(views.camera)
+        val timerWidth = views.timer.paint.measureText("00:00").toInt() + dp(12)
+        val countWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(12)
+        val moWidth = dp(38)
+        val infoWidth = maxOf(dp(58), timerWidth, countWidth)
+        (views.left.layoutParams as LinearLayout.LayoutParams).width = moWidth
+        (views.info.layoutParams as LinearLayout.LayoutParams).width = infoWidth
+        val width = 2 * dp(PATCH_PADDING_DP) + moWidth + infoWidth + cameraGap(views.camera)
         views.params.width = width
         views.params.x = maxOf(0, (views.camera?.centerX() ?: (screenWidth() / 2)) - width / 2)
         if (apply) {
             views.left.requestLayout()
+            views.info.requestLayout()
             runCatching { windowManager.updateViewLayout(views.root, views.params) }
         }
     }
@@ -372,6 +381,7 @@ class CounterOverlay(
         val views = patch ?: return
         patch = null
         views.timer.stop()
+        views.info.stopFlipping()
         if (speech != null) removeSpeech()
         if (!animate) {
             remove(views.root)
@@ -594,6 +604,7 @@ class CounterOverlay(
     private companion object {
         const val PANEL_TIMEOUT_MS = 10_000L
         const val PATCH_PADDING_DP = 8
+        const val INFO_FLIP_MS = 2_800L
         const val SNOOZE_MS = 60 * 60_000L
         /** How long a speech bubble stays up: a base plus reading time. */
         const val SPEECH_MS = 3_000L
