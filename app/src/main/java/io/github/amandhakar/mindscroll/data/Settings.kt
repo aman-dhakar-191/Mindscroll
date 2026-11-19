@@ -13,9 +13,13 @@ class Settings(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    enum class InfoMode { TIMER, COUNTER, BOTH, HIDDEN }
+
     data class Display(
         val cameraPatch: Boolean,
         val bubble: Boolean,
+        val infoMode: InfoMode,
+        val autoScroll: Boolean,
     )
 
     var onboardingDone: Boolean
@@ -29,6 +33,15 @@ class Settings(context: Context) {
     var bubble: Boolean
         get() = prefs.getBoolean(KEY_BUBBLE, false)
         set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
+
+    var infoMode: InfoMode
+        get() = runCatching { InfoMode.valueOf(prefs.getString(KEY_INFO_MODE, InfoMode.BOTH.name)!!) }
+            .getOrDefault(InfoMode.BOTH)
+        set(value) = prefs.edit().putString(KEY_INFO_MODE, value.name).apply()
+
+    var autoScroll: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_SCROLL, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_SCROLL, value).apply()
 
     /** Crash reports and technical accessibility-service diagnostics; enabled by default. */
     var diagnosticsEnabled: Boolean
@@ -54,11 +67,11 @@ class Settings(context: Context) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.conflate()
 
-    fun display() = Display(cameraPatch, bubble)
+    fun display() = Display(cameraPatch, bubble, infoMode, autoScroll)
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE) trySend(display())
+            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL) trySend(display())
         }
         trySend(display())
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -70,6 +83,8 @@ class Settings(context: Context) {
         const val KEY_CAMERA_PATCH = "camera_patch"
         const val KEY_BUBBLE = "bubble"
         const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
+        const val KEY_INFO_MODE = "info_mode"
+        const val KEY_AUTO_SCROLL = "auto_scroll"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"
