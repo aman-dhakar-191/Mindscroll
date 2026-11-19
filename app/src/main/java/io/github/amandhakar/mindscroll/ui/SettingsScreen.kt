@@ -1,6 +1,5 @@
 package io.github.amandhakar.mindscroll.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,7 +36,6 @@ fun SettingsScreen(onBack: () -> Unit) {
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
 
-    BackHandler(onBack = onBack)
     Scaffold(
         topBar = {
             Row(
