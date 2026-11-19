@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.DayTotal
 import io.github.amandhakar.mindscroll.data.Days
@@ -142,6 +143,7 @@ fun HomeScreen(
             WeekCard(week)
             TrackedAppsCard(onOpenApps)
             DisplayCard()
+            CrashReportingCard()
             MoCard(onOpenMemories)
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
@@ -273,6 +275,27 @@ private fun DisplayCard() {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Controls whether diagnostic crash reports are uploaded to Firebase Crashlytics. */
+@Composable
+private fun CrashReportingCard() {
+    val settings = LocalContext.current.app.settings
+    var enabled by remember { mutableStateOf(settings.crashReportingEnabled) }
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Diagnostics", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            ToggleRow(
+                "Send crash reports",
+                "Share crash details and device diagnostics with Firebase to help fix bugs. Reports saved while off may be uploaded if you turn this back on.",
+                enabled,
+            ) {
+                enabled = it
+                settings.crashReportingEnabled = it
+                FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(it)
+            }
         }
     }
 }
