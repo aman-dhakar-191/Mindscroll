@@ -55,6 +55,10 @@ object MoPainter {
         canvas.save()
         canvas.translate(left, top)
 
+        // A small lean-out makes Mo look around the edge before settling back in.
+        if (pose.peek > 0f) {
+            canvas.translate(s * 0.12f * pose.peek, 0f)
+        }
         // Whole-body motion, pivoting on the bottom middle.
         val pivotX = s * 0.5f
         val pivotY = s * 0.94f
@@ -74,6 +78,9 @@ object MoPainter {
             }
         }
         // A tiny crouch immediately before the pop makes reactions feel anticipated.
+        if (pose.peek > 0f) {
+            canvas.rotate(-7f * pose.peek, pivotX, pivotY)
+        }
         if (pose.anticipation > 0f) {
             canvas.scale(1 - 0.035f * pose.anticipation, 1 + 0.045f * pose.anticipation, pivotX, pivotY)
         }
@@ -312,6 +319,7 @@ class MoView @JvmOverloads constructor(
     private var reactStart: Long? = null
     private var wakeStart: Long? = null
     private var moodChangedAt: Long? = null
+    private var peekStart: Long? = null
     private var previousMoodColor: Int = mood.color.toInt()
 
     private val blinker = object : Runnable {
@@ -325,6 +333,12 @@ class MoView @JvmOverloads constructor(
     /** A new reel counted: Mo looks surprised for a moment. */
     fun react() {
         reactStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    /** Mo leans out briefly, as if noticing a change nearby. */
+    fun peek() {
+        peekStart = SystemClock.uptimeMillis()
         invalidate()
     }
 
@@ -349,15 +363,16 @@ class MoView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         val now = SystemClock.uptimeMillis()
         val size = minOf(width, height).toFloat()
-        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart, mood, moodChangedAt)
+        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart, mood, moodChangedAt, peekStart)
         MoPainter.draw(canvas, size, mood, (width - size) / 2, (height - size) / 2, pose, previousMoodColor)
 
         val blinking = blinkStart?.let { now - it < MoMotion.BLINK_MS } ?: false
         val reacting = reactStart?.let { now - it < MoMotion.REACT_MS + MoMotion.ANTICIPATION_MS } ?: false
         val waking = wakeStart?.let { now - it < MoMotion.WAKE_MS } ?: false
         val changingMood = moodChangedAt?.let { now - it < MoMotion.MOOD_TRANSITION_MS } ?: false
+        val peeking = peekStart?.let { now - it < MoMotion.PEEK_MS } ?: false
         when {
-            blinking || reacting || waking || changingMood -> postInvalidateOnAnimation()
+            blinking || reacting || waking || changingMood || peeking -> postInvalidateOnAnimation()
             idleMotion -> postInvalidateDelayed(IDLE_FRAME_MS)
         }
     }
