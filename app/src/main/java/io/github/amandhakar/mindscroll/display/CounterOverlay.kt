@@ -248,7 +248,11 @@ class CounterOverlay(
         val camera = topCutout()
         val height = maxOf((camera?.height() ?: 0) + dp(12), dp(44))
 
-        val mo = MoView(service).apply { idleMotion = true }
+        val mo = MoView(service).apply {
+            idleMotion = true
+            contentDescription = "Mo, tap to interact"
+            setOnClickListener { poke(this) }
+        }
         val timer = Chronometer(service).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
@@ -408,7 +412,11 @@ class CounterOverlay(
     @SuppressLint("ClickableViewAccessibility")
     private fun addBubble(): BubbleViews? {
         val size = dp(60)
-        val mo = MoView(service).apply { idleMotion = true }
+        val mo = MoView(service).apply {
+            idleMotion = true
+            contentDescription = "Mo, tap to interact"
+            setOnClickListener { poke(this) }
+        }
         val count = TextView(service).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
@@ -536,6 +544,22 @@ class CounterOverlay(
     }
 
     // --- Helpers ---
+
+    /** A direct tap on Mo is a small interaction; the surrounding island still opens details. */
+    private fun poke(mo: MoView) {
+        if (mo.asleep) {
+            mo.wakeUp()
+        } else {
+            mo.react()
+            mo.animate().cancel()
+            mo.scaleX = 0.94f
+            mo.scaleY = 0.94f
+            mo.animate().scaleX(1f).scaleY(1f)
+                .setDuration(260)
+                .setInterpolator(OvershootInterpolator(2.5f))
+                .start()
+        }
+    }
 
     /** When the count goes up: the number pops, and Mo hops and looks surprised. */
     private fun bump(count: View, mo: MoView) {
