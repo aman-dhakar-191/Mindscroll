@@ -18,6 +18,31 @@ data class MemoryFacts(
 
 /** Turns [MemoryFacts] into things Mo remembers, in Mo's voice. */
 object MoMemory {
+    /**
+     * Patterns worth remembering from [facts], as [Memory] candidates for [MoMemories.merge].
+     * These are observations about the counts, never guesses about why or how anyone feels.
+     * The more days of data, the surer Mo is.
+     */
+    fun candidates(facts: MemoryFacts, now: Long): List<Memory> = buildList {
+        val confidence = when {
+            facts.pastDays.size >= 6 -> Confidence.HIGH
+            facts.pastDays.size >= 3 -> Confidence.MEDIUM
+            else -> Confidence.LOW
+        }
+        fun noticed(key: String, value: String, content: String) = Memory(
+            key = key,
+            type = MemoryType.PATTERN,
+            value = value,
+            content = content,
+            source = MemorySource.NOTICED,
+            confidence = confidence,
+            createdAt = now,
+            expiresAt = now + MoMemories.NOTICED_FOR_MS,
+        )
+        facts.peakHour?.let { add(noticed(MoMemories.PEAK_HOUR, it.toString(), "We scroll most around ${hourName(it)}")) }
+        facts.favouriteApp?.let { add(noticed(MoMemories.FAVOURITE_APP, it, "$it is our usual spot")) }
+    }
+
     /** A day under this many reels is a calm day (Mo never got wobbly). */
     val CALM_DAY = Mood.WOBBLY.from
 

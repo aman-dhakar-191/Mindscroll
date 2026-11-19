@@ -224,6 +224,50 @@ object Mo {
         "I was asleep. In a good way.",
         "*blinks* hi. I dreamed you went outside.",
     )
+    // --- Things Mo brings up unprompted (see MoInitiative) ---
+
+    /** Check-in the user asked for, [minutes] ago. [late] when Mo couldn't say it on time. */
+    fun checkIn(minutes: Long, late: Boolean, seed: Long): String =
+        if (late) pick(lateCheckIn, seed) else pick(checkIns, seed).fill(0, x = minutes)
+
+    /** Mo remembers this is when we usually scroll. Not [sure], Mo says so. */
+    fun peakHourCallback(hour: String, sure: Boolean, seed: Long): String =
+        pick(if (sure) peakHourSure else peakHourUnsure, seed).replace("{hour}", hour)
+
+    /**
+     * Mo's own little world, told a bit at a time: the [beat]th story beat. Mo's ongoing
+     * research, not claims about the user.
+     */
+    fun characterBeat(beat: Int): String = pick(characterBeats, beat.toLong())
+
+    private val checkIns = listOf(
+        "That's the {x} minutes you asked about. Just checking in.",
+        "Check-in time, like you asked. {x} minutes. How's it going?",
+        "*taps the glass* {x} minutes are up. You wanted me to say.",
+    )
+    private val lateCheckIn = listOf(
+        "Sorry, I'm late for our check-in. Hi now?",
+        "I missed our check-in time. Checking in anyway.",
+    )
+    private val peakHourSure = listOf(
+        "It's {hour}. Our usual time. I remembered.",
+        "{hour} again. This is our hour, isn't it?",
+    )
+    private val peakHourUnsure = listOf(
+        "It's {hour}. I think this is our usual time? Still learning.",
+        "{hour}. If I remember right, we're often here around now.",
+    )
+    private val characterBeats = listOf(
+        "I have a theory about clouds. I can't prove it from this apartment.",
+        "Day two of the breakfast-filming mystery. No suspects yet.",
+        "I tried counting the pixels on my wall. Lost count. Don't tell anyone.",
+        "New theory: clouds are reels for the sky. Slow ones. I like them better.",
+        "Breakfast mystery update: someone filmed toast. I have more questions than before.",
+        "I practiced my yawn today. It's coming along.",
+        "I rearranged the camera hole. It looks the same. It's very small.",
+        "Still haven't solved why people film their breakfast. Research continues.",
+    )
+
     internal val milestoneSpoken = mapOf(
         25L to "25. That's a short film.",
         50L to "50! Neck stretch?",

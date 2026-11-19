@@ -63,6 +63,8 @@ class CounterOverlay(
     private var panelClosedAt = 0L
 
     private var speech: View? = null
+    /** Called when a speech bubble goes away: tapped away (true) or after running its course. */
+    var onSpeechEnded: ((dismissed: Boolean) -> Unit)? = null
     private var moAsleep = false
 
     private var state: CounterState? = null
@@ -96,6 +98,7 @@ class CounterOverlay(
             views?.let {
                 it.mo.mood = newState.mood
                 it.count.text = compact(newState.total)
+                layoutPatch(it, apply = true)
                 if (grew) bump(it.count, it.mo)
             }
         } else {
@@ -166,9 +169,10 @@ class CounterOverlay(
     /**
      * Mo says something: a speech bubble under the camera patch (or the floating bubble), for
      * a few seconds or until tapped. Skipped while the panel is open or nothing shows Mo.
+     * Returns whether it was shown.
      */
-    fun say(text: String) {
-        if (panel != null) return
+    fun say(text: String): Boolean {
+        if (panel != null) return false
         val patchViews = patch
         val bubbleViews = bubble
         val params = overlayParams(touchable = true)
@@ -187,7 +191,7 @@ class CounterOverlay(
                 params.x = at.x
                 params.y = at.y + dp(64)
             }
-            else -> return
+            else -> return false
         }
         removeSpeech()
         val accent = (state?.mood ?: Mood.CHILL).color.toInt()
@@ -203,9 +207,9 @@ class CounterOverlay(
                 setStroke(dp(1), accent)
             }
             contentDescription = "${Mo.NAME} says: $text"
-            setOnClickListener { removeSpeech() }
+            setOnClickListener { removeSpeech(dismissed = true) }
         }
-        if (!add(view, params)) return
+        if (!add(view, params)) return false
         speech = view
         if (speaker.asleep) speaker.wakeUp() else speaker.react()
         view.alpha = 0f
@@ -213,14 +217,17 @@ class CounterOverlay(
         view.animate().alpha(1f).translationY(0f).setDuration(200).setInterpolator(DecelerateInterpolator()).start()
         handler.removeCallbacks(hideSpeech)
         handler.postDelayed(hideSpeech, SPEECH_MS + text.length * SPEECH_MS_PER_CHAR)
+        return true
     }
 
-    private val hideSpeech = Runnable { removeSpeech() }
+    private val hideSpeech = Runnable { removeSpeech(dismissed = false) }
 
-    private fun removeSpeech() {
+    /** [dismissed] says how the bubble went away, or is null when it was cleared for other reasons. */
+    private fun removeSpeech(dismissed: Boolean? = null) {
         handler.removeCallbacks(hideSpeech)
         val view = speech ?: return
         speech = null
+        dismissed?.let { onSpeechEnded?.invoke(it) }
         view.animate().alpha(0f).setDuration(150).withEndAction { remove(view) }.start()
     }
 
@@ -237,7 +244,7 @@ class CounterOverlay(
 
     private fun addPatch(): PatchViews? {
         val camera = topCutout()
-        val height = maxOf((camera?.height() ?: 0) + dp(8), dp(30))
+        val height = maxOf((camera?.height() ?: 0) + dp(10), dp(34))
 
         val mo = MoView(service)
         val timer = Chronometer(service).apply {
@@ -300,8 +307,10 @@ class CounterOverlay(
         layoutPatch(views, apply = false)
         if (!add(pill, params)) return null
         pill.alpha = 0f
-        pill.scaleX = 0.6f
-        pill.animate().alpha(1f).scaleX(1f).setDuration(250).setInterpolator(DecelerateInterpolator()).start()
+        pill.scaleX = 0.88f
+        pill.scaleY = 0.82f
+        pill.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(280).setInterpolator(OvershootInterpolator(0.8f)).start()
         return views
     }
 
@@ -343,7 +352,9 @@ class CounterOverlay(
         } else {
             0
         }
-        val side = dp(30) + timerWidth
+        val leftContentWidth = dp(22) + dp(4) + timerWidth
+        val countContentWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(8)
+        val side = maxOf(dp(36), leftContentWidth, countContentWidth)
         (views.left.layoutParams as LinearLayout.LayoutParams).width = side
         (views.count.layoutParams as LinearLayout.LayoutParams).width = side
         val width = 2 * dp(PATCH_PADDING_DP) + 2 * side + cameraGap(views.camera)
@@ -355,7 +366,7 @@ class CounterOverlay(
         }
     }
 
-    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(10) else dp(6)
+    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(14) else dp(8)
 
     /** Takes the patch off screen, fading it out unless [animate] is false (shutting down). */
     private fun removePatch(animate: Boolean = true) {
@@ -566,9 +577,14 @@ class CounterOverlay(
 
     /** The front camera cutout at the top of the screen, if the phone has one and says where. */
     private fun topCutout(): Rect? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
         val cutout = defaultDisplay()?.cutout ?: return null
-        return cutout.boundingRects.firstOrNull { it.top < dp(48) && !it.isEmpty }
+        val topLimit = cutout.safeInsetTop + dp(8)
+        val screenCenter = screenWidth() / 2
+        return cutout.boundingRects
+            .asSequence()
+            .filter { !it.isEmpty && it.top <= topLimit }
+            .minByOrNull { abs(it.centerX() - screenCenter) }
     }
 
     private fun dp(value: Int): Int =

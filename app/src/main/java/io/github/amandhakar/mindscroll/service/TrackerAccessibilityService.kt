@@ -47,7 +47,7 @@ class TrackerAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
-        brain = MoBrain(this, overlay, app.metrics, scope).also { it.start() }
+        brain = MoBrain(this, overlay, app.metrics, app.moPrefs, app.moMemories, scope).also { it.start() }
         calls = CallWatcher(this) { inCall -> overlay.setInCall(inCall) }.also { it.start() }
         val metrics = app.metrics
         val appScope = app.appScope
@@ -117,6 +117,7 @@ class TrackerAccessibilityService : AccessibilityService() {
             var previous: AppSession? = null
             appSessions.session.collect { session ->
                 overlay.setSession(session)
+                brain.onSession(session)
                 // A new open (not the same session updating its timer): Mo may have something to say.
                 if (session != null && previous?.startedAt != session.startedAt) {
                     brain.onSessionStarted(session, primary.itemLabel(session.packageName))
