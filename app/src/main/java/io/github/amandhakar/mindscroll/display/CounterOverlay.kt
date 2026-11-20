@@ -111,7 +111,18 @@ class CounterOverlay(
         state = newState
         val displayChanged = display != newDisplay
         display = newDisplay
+        if (displayChanged) {
+            DetectionLog.add(
+                "display: style=${newDisplay.motionStyle.name.lowercase()}, info=${newDisplay.infoMode.name.lowercase()}, " +
+                    "mascot=${newDisplay.mascotSize.name.lowercase()}, patch=${newDisplay.cameraPatch}, bubble=${newDisplay.bubble}",
+            )
+        }
+        if (newState.mood != lastLoggedMood) {
+            DetectionLog.add("mo: mood ${lastLoggedMood?.name?.lowercase() ?: "start"} → ${newState.mood.name.lowercase()} (${newState.total} reels today)")
+            lastLoggedMood = newState.mood
+        }
 
+        logPatchWanted(patchWanted())
         if (patchWanted()) {
             val views = patch ?: addPatch()?.also {
                 patch = it
@@ -182,6 +193,7 @@ class CounterOverlay(
     /** A phone or VoIP call is ringing or under way: the patch makes room for the call chip. */
     fun setInCall(newInCall: Boolean) {
         if (newInCall == inCall) return
+        DetectionLog.add("overlay: call ${if (newInCall) "started, patch steps aside" else "ended"}")
         inCall = newInCall
         refresh()
     }
@@ -198,12 +210,14 @@ class CounterOverlay(
         if (screenOn == on) return
         screenOn = on
         val animate = on && display.motionStyle != Settings.MotionStyle.CALM
+        DetectionLog.add("mo: screen ${if (on) "on" else "off"} → idle animation ${if (animate) "on" else "off"} (${display.motionStyle.name.lowercase()})")
         patch?.mo?.idleMotion = animate
         bubble?.mo?.idleMotion = animate
     }
 
     /** Mo dozes off (true) or is put back to sleep; the patch and bubble show a sleeping Mo. */
     fun setAsleep(asleep: Boolean) {
+        if (asleep != moAsleep) DetectionLog.add("mo: ${if (asleep) "fell asleep" else "no longer asleep"}")
         moAsleep = asleep
         patch?.mo?.asleep = asleep
         bubble?.mo?.asleep = asleep
@@ -211,6 +225,7 @@ class CounterOverlay(
 
     /** Mo wakes up with a stretch and a yawn. */
     fun wakeUp() {
+        DetectionLog.add("mo: wake up (stretch and yawn)")
         moAsleep = false
         patch?.mo?.wakeUp()
         bubble?.mo?.wakeUp()
@@ -406,6 +421,7 @@ class CounterOverlay(
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
             if (reaction == SessionReaction.APP_EXIT) {
+                DetectionLog.add("mo: app exit → turns away smiling for ${profile().exitMs}ms, then the patch goes")
                 exitPending = true
                 patch?.mo?.exitSession()
                 bubble?.mo?.exitSession()
@@ -445,6 +461,14 @@ class CounterOverlay(
      * after a break wakes (or, if awake, beams with a joyful hop), and exit turns away smiling.
      */
     private fun playSessionReaction(mo: MoView, reaction: SessionReaction) {
+        DetectionLog.add(
+            "mo: ${reaction.name.lowercase()} → " + when (reaction) {
+                SessionReaction.FIRST_ENTRY -> "lean out and smile"
+                SessionReaction.APP_SWITCH -> "sideways glance"
+                SessionReaction.RETURN_AFTER_BREAK -> if (mo.asleep) "wake with a stretch" else "joyful hop"
+                else -> "nothing"
+            } + " (${display.motionStyle.name.lowercase()})",
+        )
         when (reaction) {
             SessionReaction.FIRST_ENTRY -> mo.peek()
             SessionReaction.APP_SWITCH -> mo.glance()
@@ -503,6 +527,19 @@ class CounterOverlay(
     }
 
     private var lastLoggedInfo = ""
+    private var lastLoggedMood: Mood? = null
+    private var lastPatchWanted: Boolean? = null
+
+    /** Logs the patch appearing or going away, with what was holding it back. */
+    private fun logPatchWanted(wanted: Boolean) {
+        if (lastPatchWanted == wanted) return
+        lastPatchWanted = wanted
+        DetectionLog.add(
+            if (wanted) "overlay: patch shown"
+            else "overlay: patch hidden (cameraPatch=${display.cameraPatch}, portrait=${isPortrait()}, inCall=$inCall, " +
+                "snoozed=${SystemClock.uptimeMillis() < snoozedUntil}, session=${session != null}, exiting=$exitPending)",
+        )
+    }
 
     /** Logs what the patch shows and why, when that changes, so a surprise can be explained afterwards. */
     private fun logInfoDecision(mode: Settings.InfoMode) {
@@ -610,6 +647,7 @@ class CounterOverlay(
 
     /** Hides the patch for [SNOOZE_MS]; it comes back by itself. */
     private fun snooze() {
+        DetectionLog.add("overlay: long-press → hidden for an hour")
         snoozedUntil = SystemClock.uptimeMillis() + SNOOZE_MS
         handler.removeCallbacks(endSnooze)
         handler.postDelayed(endSnooze, SNOOZE_MS)
@@ -797,10 +835,12 @@ class CounterOverlay(
         consecutivePokes = if (now - lastPokeAtMs <= 650L) consecutivePokes + 1 else 1
         lastPokeAtMs = now
         if (mo.asleep) {
+            DetectionLog.add("mo: tapped while asleep")
             mo.wakeUp()
         } else {
             val p = profile()
             val repeated = consecutivePokes >= 3
+            DetectionLog.add("mo: tapped (#$consecutivePokes in a row${if (repeated) ", giggles" else ""}, ${display.motionStyle.name.lowercase()})")
             // Tickled: the third quick tap in a row turns the startle into a giggle.
             mo.react(excited = repeated)
             val playful = display.motionStyle == Settings.MotionStyle.PLAYFUL
@@ -827,7 +867,13 @@ class CounterOverlay(
         lastReelAtMs = now
         // Mid-reaction, the body skips its crouch (see MoMotion.anticipationLength), so the hop must too.
         val chained = sinceLastReel < p.reactMs / 2
-        mo.react(excited = rapidReels >= RAPID_REELS_FOR_EXCITEMENT && mo.mood != Mood.DIZZY && mo.mood != Mood.SLEEPY)
+        val excited = rapidReels >= RAPID_REELS_FOR_EXCITEMENT && mo.mood != Mood.DIZZY && mo.mood != Mood.SLEEPY
+        DetectionLog.add(
+            "mo: reel #${state?.total} → ${if (excited) "excited" else "startle"}, " +
+                "${if (chained) "chained (no crouch)" else "fresh crouch"}, gap ${if (sinceLastReel > 60_000) ">1min" else "${sinceLastReel}ms"}, " +
+                "streak $rapidReels, ${display.motionStyle.name.lowercase()}",
+        )
+        mo.react(excited = excited)
         val peak = 1f + 0.25f * p.hop + 0.05f
         kick(count, peak, peak, hopPx = 0f, p = p)
         // Mo hops as the crouch releases; the body's own squash and stretch are drawn by MoView.
