@@ -55,7 +55,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("Overlay display", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Card {
+            Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Camera island information", style = MaterialTheme.typography.bodyLarge)
                     InfoChoice("Session timer only", infoMode == Settings.InfoMode.TIMER) {
@@ -87,7 +87,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             Text("Where Mo appears", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Card {
+            Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PreferenceSwitch(
                         "Around the camera",
@@ -108,7 +108,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
             Text("Mo's personality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Card {
+            Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Mascot size", style = MaterialTheme.typography.bodyLarge)
                     InfoChoice("Compact", mascotSize == Settings.MascotSize.COMPACT) {
