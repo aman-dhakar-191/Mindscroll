@@ -41,6 +41,10 @@ data class MoPose(
     val browSkew: Float = 0f,
     /** Mouth corners, shared by every expression. -1 frown .. 1 broad smile. */
     val smile: Float = 0f,
+    /** Dizzy or mesmerised: spiral eyes and a wobble. 0..1 envelope. */
+    val whirl: Float = 0f,
+    /** How many turns the spiral eyes have made since the whirl began (for the eyes and the wobble). */
+    val whirlTurn: Float = 0f,
     /** Scales the idle sway and breathing for the motion style. */
     val idleAmplitude: Float = 1f,
     /** Scales the hop of a reaction for the motion style. */
@@ -139,6 +143,10 @@ object MoMotion {
     const val PEEK_MS = 680L
     const val EXIT_MS = 720L
     const val GLANCE_MS = 700L
+    /** Spiral eyes for scrolling too fast: quick spin, short. */
+    const val WHIRL_FAST_MS = 1_800L
+    /** Spiral eyes for staring at one reel: slow and long, mesmerised. */
+    const val WHIRL_SLOW_MS = 3_200L
     private const val EXIT_LEAN_IN = 0.3f
     /** A gesture that interrupts another one blends out the old pose over this long. */
     const val CARRY_FADE_MS = 160L
@@ -300,6 +308,24 @@ object MoMotion {
         return sin(t * 2f * PI.toFloat()) * (1f - smoothStep(t))
     }
 
+    fun whirlDurationMs(slow: Boolean): Long = if (slow) WHIRL_SLOW_MS else WHIRL_FAST_MS
+
+    /** Spiral eyes: they come in quickly, hold, then ease out over the last third. */
+    fun whirl(sinceMs: Long, slow: Boolean): Float {
+        val length = whirlDurationMs(slow)
+        if (sinceMs < 0 || sinceMs >= length) return 0f
+        val t = sinceMs.toFloat() / length
+        return when {
+            t < 0.12f -> smoothStep(t / 0.12f)
+            t < 0.65f -> 1f
+            else -> 1f - smoothStep((t - 0.65f) / 0.35f)
+        }
+    }
+
+    /** Turns made by the spiral eyes [sinceMs] into a whirl: fast spins about 1.6 times a second, slow 0.5. */
+    fun whirlTurn(sinceMs: Long, slow: Boolean): Float =
+        if (sinceMs < 0) 0f else sinceMs / 1000f * (if (slow) 0.5f else 1.6f)
+
     /**
      * Blends the pose a gesture was interrupted in back to the new gesture over
      * [CARRY_FADE_MS], so restarting a gesture mid-flight never snaps.
@@ -363,6 +389,8 @@ object MoMotion {
         reactProfile: MotionProfile = profile,
         /** An idle stretch and yawn (Mo stays awake), as opposed to waking up. */
         yawnStartMs: Long? = null,
+        whirlStartMs: Long? = null,
+        whirlSlow: Boolean = false,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
         val sinceReact = reactStartMs?.let { timeMs - it }
@@ -400,6 +428,8 @@ object MoMotion {
             else -> 0f
         }
         val yawn = maxOf(sinceWake?.let { yawn(it) } ?: 0f, yawnStartMs?.let { yawn(timeMs - it) } ?: 0f)
+        val whirlSince = whirlStartMs?.let { timeMs - it }
+        val whirl = whirlSince?.let { whirl(it, whirlSlow) } ?: 0f
         val startle = react.coerceAtLeast(0f)
         val excite = if (reactExcited) startle else 0f
         val surprise = startle - excite
@@ -410,12 +440,12 @@ object MoMotion {
             baseBrow(mood) +
                 surprise * 0.9f + excite * 0.5f +
                 peek * 0.5f + abs(glance) * 0.3f +
-                exit * 0.2f
+                exit * 0.2f - whirl * 0.3f
             ) * (1f - sleep * 0.6f)
         val smile = (
             baseSmile(mood) +
                 excite * 0.9f - surprise * 0.5f +
-                peek * 0.35f + exit * 0.5f
+                peek * 0.35f + exit * 0.5f - whirl * 0.25f
             ) * (1f - sleep * 0.5f)
 
         return MoPose(
@@ -438,6 +468,8 @@ object MoMotion {
             brow = brow.coerceIn(-1f, 1f),
             browSkew = (abs(glance) * 0.8f + peek * 0.3f).coerceIn(0f, 1f),
             smile = smile.coerceIn(-1f, 1f),
+            whirl = whirl,
+            whirlTurn = whirlSince?.let { whirlTurn(it, whirlSlow) } ?: 0f,
             idleAmplitude = profile.idleAmplitude,
             hop = profile.hop,
         )

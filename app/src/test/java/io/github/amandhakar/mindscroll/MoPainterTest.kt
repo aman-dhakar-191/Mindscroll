@@ -122,6 +122,21 @@ class MoPainterTest {
     }
 
     @Test
+    fun theSpiralEyesLookDifferentAndNeverClip() {
+        for (mood in Mood.entries) {
+            val rest = render(mood, MoPose(brow = MoMotion.baseBrow(mood), smile = MoMotion.baseSmile(mood)))
+            val dizzy = render(mood, MoMotion.pose(2000 + MoMotion.WHIRL_FAST_MS / 3, null, null, false, mood = mood, whirlStartMs = 2000))
+            assertTrue("$mood whirl differs from rest", rest.differsFrom(dizzy))
+            for (slow in listOf(false, true)) {
+                for (t in 0L until MoMotion.whirlDurationMs(slow) step 40) {
+                    val bitmap = render(mood, MoMotion.pose(2000 + t, null, null, false, mood = mood, whirlStartMs = 2000, whirlSlow = slow))
+                    assertFalse("$mood whirl slow=$slow t=$t touches the edge", bitmap.edgePixels() > 0)
+                }
+            }
+        }
+    }
+
+    @Test
     fun squashAndStretchChangeTheSilhouette() {
         val rest = render(Mood.CHILL, MoPose())
         val stretched = render(Mood.CHILL, MoPose(react = 1f))

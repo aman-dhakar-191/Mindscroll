@@ -17,7 +17,9 @@ import io.github.amandhakar.mindscroll.mascot.MoInitiative
 import io.github.amandhakar.mindscroll.mascot.MoMemory
 import io.github.amandhakar.mindscroll.mascot.MoMoments
 import io.github.amandhakar.mindscroll.mascot.MoPolicy
+import io.github.amandhakar.mindscroll.mascot.MoScrollWatch
 import io.github.amandhakar.mindscroll.mascot.MoSleep
+import io.github.amandhakar.mindscroll.mascot.ScrollPattern
 import io.github.amandhakar.mindscroll.mascot.MoStore
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
@@ -54,6 +56,17 @@ class MoBrain(
     private val _asleep = MutableStateFlow(false)
     /** Whether Mo is asleep, for the widget and notification. */
     val asleep: StateFlow<Boolean> = _asleep.asStateFlow()
+
+    /** Habits Mo notices from the reels and sessions; see [MoScrollWatch]. */
+    private val watch = MoScrollWatch()
+    private var lastEndedPackage: String? = null
+    private var lastEndedAt: Long? = null
+
+    /** Wakes at the moment a waiting habit (a reel left alone, a long stretch) could become due. */
+    private val patternCheck = Runnable {
+        watch.due(SystemClock.elapsedRealtime())?.let(::noticed)
+        scheduleWatch()
+    }
 
     private var lastTotal: Long? = null
     /** The tracked-app session in progress, if any. */
@@ -102,6 +115,7 @@ class MoBrain(
 
     fun stop() {
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(patternCheck)
         overlay.onSpeechEnded = null
         runCatching { context.unregisterReceiver(screenReceiver) }
     }
@@ -112,6 +126,8 @@ class MoBrain(
         lastTotal = total
         if (previous != null && total > previous) {
             sleep.onActivity(SystemClock.elapsedRealtime())?.let { slept -> wake(slept) }
+            watch.onReel(SystemClock.elapsedRealtime())?.let(::noticed)
+            scheduleWatch()
             speak(moments.onReel(
                 System.currentTimeMillis(),
                 total,
@@ -123,12 +139,22 @@ class MoBrain(
 
     /** The tracked-app session changed: [current] is in progress, or null outside tracked apps. */
     fun onSession(current: AppSession?) {
+        val ended = session
+        if (current == null && ended != null) {
+            lastEndedPackage = ended.packageName
+            lastEndedAt = SystemClock.elapsedRealtime()
+            watch.onSessionEnd()
+            handler.removeCallbacks(patternCheck)
+        }
         session = current
     }
 
     /** A watched app was opened. */
     fun onSessionStarted(session: AppSession, label: String) {
-        sleep.onActivity(SystemClock.elapsedRealtime())?.let { slept -> wake(slept) }
+        val elapsed = SystemClock.elapsedRealtime()
+        sleep.onActivity(elapsed)?.let { slept -> wake(slept) }
+        watch.onSessionStart(elapsed, session.packageName, lastEndedPackage, lastEndedAt)?.let(::noticed)
+        scheduleWatch()
         val now = System.currentTimeMillis()
         if (policy.claimGreeting(now)) {
             // First reel app of the day: Mo remembers yesterday.
@@ -175,6 +201,21 @@ class MoBrain(
                 considering = false
             }
         }
+    }
+
+    /** Mo noticed a habit: react with the body, and maybe say something (the [policy] decides). */
+    private fun noticed(pattern: ScrollPattern) {
+        if (sleep.asleep) return
+        val now = SystemClock.elapsedRealtime()
+        DetectionLog.add("pattern: ${pattern.label}")
+        overlay.onPattern(pattern)
+        speak(moments.onPattern(System.currentTimeMillis(), pattern, minutes = watch.minutesIn(now)))
+    }
+
+    private fun scheduleWatch() {
+        handler.removeCallbacks(patternCheck)
+        val at = watch.nextCheckAt() ?: return
+        handler.postDelayed(patternCheck, (at - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
     }
 
     private fun wake(sleptMs: Long) {

@@ -54,6 +54,19 @@ class MoMoments(private val policy: MoPolicy = MoPolicy()) {
         return null
     }
 
+    /**
+     * Mo noticed a habit ([ScrollPattern]). Flicking through reels is shown, not said (the fast
+     * swipe remark covers it); the others get a line, subject to the [policy] like everything
+     * else. [minutes] is how long a [ScrollPattern.MARATHON] has run.
+     */
+    fun onPattern(now: Long, pattern: ScrollPattern, minutes: Long = 0): String? = when (pattern) {
+        ScrollPattern.TOO_FAST -> null
+        ScrollPattern.LINGERING -> say(now, next("linger", Mo.lingering))
+        ScrollPattern.STARING -> say(now, next("stare", Mo.staring))
+        ScrollPattern.MARATHON -> say(now, next("marathon", Mo.marathon).fill(0, x = minutes))
+        ScrollPattern.QUICK_RETURN -> say(now, next("quick", Mo.quickReturn))
+    }
+
     /** Mo just woke up after sleeping [sleptMs]. */
     fun onWake(now: Long, sleptMs: Long): String? {
         if (sleptMs < MoSleep.LONG_SLEEP_MS) return null

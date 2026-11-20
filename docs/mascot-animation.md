@@ -55,6 +55,24 @@ Plain rules and statistics, no model, nothing leaves the phone.
 - Both write to the detection log (`mo: idle → …`, and `run`, `novelty`, `energy`, `size`, `tempo`
   on each reel line), so what Mo did and why can be read back.
 
+## Habits Mo notices (`MoScrollWatch`)
+
+Detected from reel timestamps and app sessions; no polling, it sleeps until a pattern could next
+become due. Each fires once per occasion.
+
+| Habit | Detected | Mo does |
+|---|---|---|
+| Scrolling too fast | 5+ reels within 10 s (not again for 30 s) | dizzy: fast spiral eyes, wobble |
+| Lingering on one reel | 45 s since the last counted reel, still in the app | leans in with raised brows, and a line |
+| Staring at one reel | 2 min since the last counted reel | mesmerised: slow spiral eyes, and a line |
+| A long stretch | every 20 min in one session | stretch and yawn, and a line saying how long |
+| Straight back | back in the same app within 45 s of leaving | double take (a glance, then a lean in), and a line |
+
+Lingering and staring only count after a reel was counted in the session, so reading comments or
+messages in the app is not "stuck on a reel". All lines go through the same policy as the rest of
+Mo's speech (quiet hours, snooze, rate limits). Each habit also writes `pattern: …` and the reaction
+to the detection log.
+
 ## Battery
 
 - Event animations draw at display rate only while they run.
