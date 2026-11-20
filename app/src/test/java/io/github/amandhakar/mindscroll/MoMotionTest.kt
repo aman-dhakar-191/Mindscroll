@@ -23,10 +23,11 @@ class MoMotionTest {
 
     @Test
     fun reactionPeaksQuicklyThenSettles() {
-        assertEquals(1f, MoMotion.react(120), 0.01f)
-        assertTrue(MoMotion.react(60) > 0.8f)
-        assertTrue(MoMotion.react(400) < MoMotion.react(200))
-        assertEquals(0f, MoMotion.react(MoMotion.REACT_MS), 0f)
+        val p = MotionProfile.BALANCED
+        assertEquals(1f, MoMotion.react(p.riseMs), 0.01f)
+        assertTrue(MoMotion.react(p.riseMs / 2) > 0.8f)
+        assertTrue(MoMotion.react(p.riseMs + p.settleMs * 2 / 3) < MoMotion.react(p.riseMs + p.settleMs / 6))
+        assertEquals(0f, MoMotion.react(p.reactMs), 0f)
         assertEquals(0f, MoMotion.react(-5), 0f)
     }
 
@@ -39,14 +40,15 @@ class MoMotionTest {
 
     @Test
     fun reactionHasAnticipationBeforeThePop() {
-        val anticipation = MoMotion.pose(1045, null, 1000, true)
-        assertTrue(anticipation.anticipation > 0f)
-        assertEquals(0f, anticipation.react, 0f)
-        val pop = MoMotion.pose(1120, null, 1000, true)
+        val p = MotionProfile.BALANCED
+        val crouch = MoMotion.pose(1000 + p.anticipationMs / 2, null, 1000, true)
+        assertTrue(crouch.anticipation > 0f)
+        assertEquals(0f, crouch.react, 0f)
+        val pop = MoMotion.pose(1000 + p.anticipationMs + p.riseMs / 4, null, 1000, true)
         assertTrue(pop.react > 0f)
         // The crouch releases as the pop rises instead of snapping off.
         assertTrue(pop.anticipation in 0.01f..0.99f)
-        assertEquals(0f, MoMotion.pose(1000 + 90 + 120, null, 1000, true).anticipation, 0f)
+        assertEquals(0f, MoMotion.pose(1000 + p.anticipationMs + p.riseMs, null, 1000, true).anticipation, 0f)
     }
 
     @Test
@@ -62,8 +64,8 @@ class MoMotionTest {
     @Test
     fun moodTransitionEasesToComplete() {
         val start = MoMotion.pose(1000, null, null, true, moodChangedAtMs = 1000)
-        val middle = MoMotion.pose(1210, null, null, true, moodChangedAtMs = 1000)
-        val end = MoMotion.pose(1500, null, null, true, moodChangedAtMs = 1000)
+        val middle = MoMotion.pose(1000 + MoMotion.MOOD_TRANSITION_MS / 2, null, null, true, moodChangedAtMs = 1000)
+        val end = MoMotion.pose(1000 + MoMotion.MOOD_TRANSITION_MS, null, null, true, moodChangedAtMs = 1000)
         assertEquals(0f, start.moodTransition, 0f)
         assertTrue(middle.moodTransition in 0f..1f)
         assertEquals(1f, end.moodTransition, 0f)
@@ -355,10 +357,12 @@ class MoMotionTest {
 
     @Test
     fun lifecycleGesturesHaveDistinctSignatures() {
+        // Gesture shapes are defined at 1x; the style plays them at its own speed.
+        fun at(shapeMs: Long) = (shapeMs / MotionProfile.BALANCED.gestureSpeed).toLong()
         val rest = MoMotion.pose(1000, null, null, false, mood = Mood.CHILL)
-        val hello = MoMotion.pose(1000 + 240, null, null, false, mood = Mood.CHILL, peekStartMs = 1000)
-        val switched = MoMotion.pose(1000 + 175, null, null, false, mood = Mood.CHILL, glanceStartMs = 1000)
-        val farewell = MoMotion.pose(1000 + 230, null, null, false, mood = Mood.CHILL, exitStartMs = 1000)
+        val hello = MoMotion.pose(1000 + at(240), null, null, false, mood = Mood.CHILL, peekStartMs = 1000)
+        val switched = MoMotion.pose(1000 + at(175), null, null, false, mood = Mood.CHILL, glanceStartMs = 1000)
+        val farewell = MoMotion.pose(1000 + at(230), null, null, false, mood = Mood.CHILL, exitStartMs = 1000)
         // Hello leans out and smiles, a switch looks sideways, a farewell smiles and turns away.
         assertTrue(hello.peek > 0.5f && hello.smile >= rest.smile && hello.brow > rest.brow)
         assertTrue(abs(switched.gazeX) > 0.03f && switched.browSkew > 0.3f && switched.peek == 0f)
@@ -379,7 +383,7 @@ class MoMotionTest {
     fun gestureLengthsScaleWithTheStyle() {
         assertTrue(MotionProfile.CALM.exitMs > MotionProfile.BALANCED.exitMs)
         assertTrue(MotionProfile.BALANCED.exitMs > MotionProfile.PLAYFUL.exitMs)
-        assertEquals(MoMotion.PEEK_MS, MotionProfile.BALANCED.peekMs)
+        assertEquals((MoMotion.PEEK_MS / MotionProfile.BALANCED.gestureSpeed).toLong(), MotionProfile.BALANCED.peekMs)
         // A slower style stretches the gesture across its longer window and still ends at rest.
         val p = MotionProfile.CALM
         assertEquals(0f, MoMotion.pose(p.exitMs, null, null, false, exitStartMs = 0, profile = p).exit, 0.001f)

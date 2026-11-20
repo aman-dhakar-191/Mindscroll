@@ -86,17 +86,17 @@ data class MotionProfile(
     companion object {
         /** Soft and unhurried: small, critically damped reactions with no bounce. */
         val CALM = MotionProfile(
-            reactScale = 0.8f, anticipationMs = 50, riseMs = 200, settleMs = 520, damping = 1f,
-            hop = 0.4f, idleAmplitude = 0.6f, idleFrameMs = 66, gestureSpeed = 0.8f, blinkGapScale = 1.3f,
+            reactScale = 0.8f, anticipationMs = 80, riseMs = 320, settleMs = 850, damping = 1f,
+            hop = 0.4f, idleAmplitude = 0.6f, idleFrameMs = 66, gestureSpeed = 0.55f, blinkGapScale = 1.3f,
         )
         val BALANCED = MotionProfile(
-            reactScale = 1.1f, anticipationMs = 90, riseMs = 120, settleMs = 630, damping = 0.55f,
-            hop = 1f, idleAmplitude = 1f, idleFrameMs = 50, gestureSpeed = 1f, blinkGapScale = 1f,
+            reactScale = 1.1f, anticipationMs = 150, riseMs = 200, settleMs = 1000, damping = 0.55f,
+            hop = 1f, idleAmplitude = 1f, idleFrameMs = 50, gestureSpeed = 0.65f, blinkGapScale = 1f,
         )
         /** Snappy and springy: a longer crouch, a fast pop, a couple of rebounds. */
         val PLAYFUL = MotionProfile(
-            reactScale = 1.45f, anticipationMs = 140, riseMs = 80, settleMs = 900, damping = 0.28f,
-            hop = 1.7f, idleAmplitude = 1.35f, idleFrameMs = 40, gestureSpeed = 1.3f, blinkGapScale = 0.7f,
+            reactScale = 1.45f, anticipationMs = 220, riseMs = 130, settleMs = 1350, damping = 0.28f,
+            hop = 1.7f, idleAmplitude = 1.35f, idleFrameMs = 40, gestureSpeed = 0.85f, blinkGapScale = 0.7f,
         )
     }
 }
@@ -115,13 +115,14 @@ object MoMotion {
     /** Length of one idle loop. */
     const val LOOP_MS = 3600L
     const val BLINK_MS = 180L
-    const val REACT_MS = 750L
+    /** Balanced style's length of a reaction without the crouch (kept for callers; see [MotionProfile.reactMs]). */
+    const val REACT_MS = 1200L
     /** Waking: eyes open over the first part, the yawn rises and falls over the whole. */
     const val WAKE_MS = 1600L
     private const val EYES_OPEN_MS = 1100L
     private const val REACT_RISE_MS = 120L
     const val ANTICIPATION_MS = 90L
-    const val MOOD_TRANSITION_MS = 420L
+    const val MOOD_TRANSITION_MS = 650L
     const val PEEK_MS = 680L
     const val EXIT_MS = 720L
     const val GLANCE_MS = 700L
