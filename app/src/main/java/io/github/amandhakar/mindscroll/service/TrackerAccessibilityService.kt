@@ -121,6 +121,17 @@ class TrackerAccessibilityService : AccessibilityService() {
                     brain.onCounter(state.total, state.mood)
                 }
         }
+        // Which tracked apps count reels (the rest have the timer only), whenever that changes.
+        scope.launch {
+            combine(TrackedApps.packages, TrackedApps.reelPackages) { tracked, _ ->
+                tracked.filter(TrackedApps::countsReels) to tracked.filterNot(TrackedApps::countsReels)
+            }.collect { (reels, timerOnly) ->
+                DetectionLog.add(
+                    "reels counted in: ${reels.joinToString { TrackedApps.label(it) }.ifEmpty { "no apps" }}; " +
+                        "timer only: ${timerOnly.joinToString { TrackedApps.label(it) }.ifEmpty { "none" }}",
+                )
+            }
+        }
         // Live timer in the camera patch while a watched app is in use. It resumes from the
         // time already saved today, so reopening an app continues its timer.
         scope.launch {

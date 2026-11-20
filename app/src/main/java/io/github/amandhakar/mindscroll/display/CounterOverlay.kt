@@ -39,6 +39,7 @@ import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.mascot.SessionReaction
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.service.AppSession
+import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import io.github.amandhakar.mindscroll.ui.MainActivity
@@ -389,6 +390,18 @@ class CounterOverlay(
             hasSeenSession = hasSeenSession,
         )
 
+        // So "Count looks wrong?" can explain what the patch shows, and why.
+        if (newSession == null) {
+            if (hasSeenSession) DetectionLog.add("overlay: no app session now (was ${previousPackage ?: "none"})")
+        } else if (newSession.packageName != session?.packageName) {
+            val pkg = newSession.packageName
+            val source = if (TrackedApps.reelPackages.value == null) "default" else "your choice"
+            DetectionLog.add(
+                "overlay: session in ${TrackedApps.label(pkg)} ($pkg), reels counted there: " +
+                    "${TrackedApps.countsReels(pkg)} ($source)",
+            )
+        }
+
         session = newSession
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
@@ -489,7 +502,20 @@ class CounterOverlay(
         bubble?.count?.visibility = if (reelContext()) View.VISIBLE else View.GONE
     }
 
+    private var lastLoggedInfo = ""
+
+    /** Logs what the patch shows and why, when that changes, so a surprise can be explained afterwards. */
+    private fun logInfoDecision(mode: Settings.InfoMode) {
+        val line = "overlay shows ${mode.name.lowercase()}: chosen=${display.infoMode.name.lowercase()}, " +
+            "session=${session?.packageName ?: "none"}, reelApp=${session?.packageName?.let(TrackedApps::countsReels) ?: "n/a"}, " +
+            "exiting=$exitPending"
+        if (line == lastLoggedInfo) return
+        lastLoggedInfo = line
+        DetectionLog.add(line)
+    }
+
     private fun bindInfoMode(views: PatchViews) {
+        logInfoDecision(infoMode())
         when (infoMode()) {
             Settings.InfoMode.TIMER -> {
                 views.info.visibility = if (session == null) View.GONE else View.VISIBLE

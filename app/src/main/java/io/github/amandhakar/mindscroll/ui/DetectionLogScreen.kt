@@ -42,9 +42,10 @@ fun DetectionLogScreen(onBack: () -> Unit) {
         Column(Modifier.safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Detection log", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "Open Instagram, YouTube or Facebook, do the thing that counted wrong, then come " +
-                    "back and copy this. It shows view ids, list positions and sizes, never what's " +
-                    "on screen. Kept in memory only.",
+                "Open the app, do the thing that looked wrong, then come back and copy this. It " +
+                    "shows what Mindscroll decided: reel detection, when app sessions start and end " +
+                    "and why, and what the camera patch shows. View ids, list positions and sizes, " +
+                    "never what's on screen. Kept in memory only.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
