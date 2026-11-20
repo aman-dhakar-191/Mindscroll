@@ -29,7 +29,7 @@ import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.Settings
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: () -> Unit) {
     val settings = LocalContext.current.app.settings
     var infoMode by remember { mutableStateOf(settings.infoMode) }
     var autoScroll by remember { mutableStateOf(settings.autoScroll) }
@@ -54,7 +54,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Overlay display", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            SectionHeader("Overlay display")
             Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Camera island information", style = MaterialTheme.typography.bodyLarge)
@@ -86,7 +86,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            Text("Where Mo appears", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            SectionHeader("Where Mo appears")
             Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PreferenceSwitch(
@@ -107,7 +107,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
-            Text("Mo's personality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            SectionHeader("Mo's personality")
             Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Mascot size", style = MaterialTheme.typography.bodyLarge)
@@ -146,6 +146,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            SectionHeader("Tracking")
+            TrackedAppsCard(onOpenApps)
+            SectionHeader("Mo")
+            MoCard(onOpenMemories)
+            SectionHeader("Privacy")
+            DiagnosticsCard()
             Text(
                 "The notification and home-screen widget continue showing today's count.",
                 style = MaterialTheme.typography.bodySmall,

@@ -34,15 +34,20 @@ class MainActivity : ComponentActivity() {
                     permissions = PermissionState.read(context)
                 }
 
-                if (showSettings) {
-                    BackHandler { showSettings = false }
-                    SettingsScreen(onBack = { showSettings = false })
-                } else if (showMemories) {
+                // Apps and memories open from Settings, on top of it: Back returns there.
+                if (showMemories) {
                     BackHandler { showMemories = false }
                     MoMemoryScreen(onBack = { showMemories = false })
                 } else if (showApps) {
                     BackHandler { showApps = false }
                     TrackedAppsScreen(onBack = { showApps = false })
+                } else if (showSettings) {
+                    BackHandler { showSettings = false }
+                    SettingsScreen(
+                        onBack = { showSettings = false },
+                        onOpenApps = { showApps = true },
+                        onOpenMemories = { showMemories = true },
+                    )
                 } else if (showLog) {
                     BackHandler { showLog = false }
                     DetectionLogScreen(onBack = { showLog = false })
@@ -62,8 +67,6 @@ class MainActivity : ComponentActivity() {
                         permissions = permissions,
                         onOpenSetup = { onboarding = true },
                         onOpenLog = { showLog = true },
-                        onOpenApps = { showApps = true },
-                        onOpenMemories = { showMemories = true },
                         onOpenSettings = { showSettings = true },
                     )
                 }

@@ -1,5 +1,6 @@
 package io.github.amandhakar.mindscroll.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,9 +39,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,8 +78,6 @@ fun HomeScreen(
     permissions: PermissionState,
     onOpenSetup: () -> Unit,
     onOpenLog: () -> Unit,
-    onOpenApps: () -> Unit,
-    onOpenMemories: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -92,66 +97,92 @@ fun HomeScreen(
     }
 
     Surface(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .safeDrawingPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (!permissions.accessibility) {
-                Card(
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                ) {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Counting is off", fontWeight = FontWeight.SemiBold)
-                        Text("Mindscroll's accessibility service is turned off, so new reels aren't counted.")
-                        FilledTonalButton(onClick = onOpenSetup) { Text("Turn it back on") }
-                    }
-                }
-            }
-
-            Hero(total, mood, tracker.title.lowercase())
-
-            if (apps.isNotEmpty()) {
-                val maxReels = apps.maxOf { it.reels }.toFloat().coerceAtLeast(1f)
-                Panel {
-                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Today", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${Durations.format(apps.sumOf { it.timeMs })} in apps",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+        Column(Modifier.safeDrawingPadding()) {
+            HomeTopBar(onOpenSetup = onOpenSetup, onOpenLog = onOpenLog, onOpenSettings = onOpenSettings)
+            Column(
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (!permissions.accessibility) {
+                    Card(
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    ) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Counting is off", fontWeight = FontWeight.SemiBold)
+                            Text("Mindscroll's accessibility service is turned off, so new reels aren't counted.")
+                            FilledTonalButton(onClick = onOpenSetup) { Text("Turn it back on") }
                         }
-                        apps.forEach { AppRow(it, it.reels.toFloat() / maxReels) }
                     }
                 }
-            }
 
-            memory?.let { MemoryCard(MoMemory.insights(it)) }
-            WeekCard(week)
+                Hero(total, mood, tracker.title.lowercase())
 
-            SectionHeader("Customize")
-            TrackedAppsCard(onOpenApps)
-            MoCard(onOpenMemories)
-            DiagnosticsCard()
+                if (apps.isNotEmpty()) {
+                    val maxReels = apps.maxOf { it.reels }.toFloat().coerceAtLeast(1f)
+                    Panel {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Today", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "${Durations.format(apps.sumOf { it.timeMs })} in apps",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            apps.forEach { AppRow(it, it.reels.toFloat() / maxReels) }
+                        }
+                    }
+                }
 
-            Row(Modifier.align(Alignment.CenterHorizontally)) {
-                TextButton(onClick = onOpenSetup) { Text("Permissions and setup") }
-                TextButton(onClick = onOpenLog) { Text("Count looks wrong?") }
-                TextButton(onClick = onOpenSettings) { Text("Settings") }
+                memory?.let { MemoryCard(MoMemory.insights(it)) }
+                WeekCard(week)
             }
         }
     }
 }
 
 /**
- * The top of the page: one mood-tinted card holding the greeting, Mo with their speech bubble,
- * and today's count, so the screen opens on a single focal point instead of three loose pieces.
+ * The app name on the left; the rarely needed things (setup, "count looks wrong?", settings) in
+ * an overflow menu on the right, where people look for them.
  */
+@Composable
+private fun HomeTopBar(onOpenSetup: () -> Unit, onOpenLog: () -> Unit, onOpenSettings: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val dots = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        Modifier.fillMaxWidth().padding(start = 24.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Mindscroll",
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Box {
+            IconButton(
+                onClick = { open = true },
+                modifier = Modifier.semantics { contentDescription = "More options" },
+            ) {
+                // Three dots, drawn: no icon library needed, and it follows the theme colour.
+                Canvas(Modifier.size(20.dp)) {
+                    repeat(3) { i ->
+                        drawCircle(dots, radius = 2.2.dp.toPx(), center = Offset(size.width / 2, size.height * (0.15f + 0.35f * i)))
+                    }
+                }
+            }
+            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                DropdownMenuItem(text = { Text("Settings") }, onClick = { open = false; onOpenSettings() })
+                DropdownMenuItem(text = { Text("Permissions and setup") }, onClick = { open = false; onOpenSetup() })
+                DropdownMenuItem(text = { Text("Count looks wrong?") }, onClick = { open = false; onOpenLog() })
+            }
+        }
+    }
+}
+
 @Composable
 private fun Hero(total: Long, mood: Mood, unit: String) {
     val rested = Mo.isRested(total, mood)
@@ -310,146 +341,5 @@ private fun WeekCard(week: List<DayTotal>) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TrackedAppsCard(onOpenApps: () -> Unit) {
-    val tracked by TrackedApps.packages.collectAsStateWithLifecycle()
-    val names = tracked.map(TrackedApps::label).sorted()
-    Panel {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Apps to track", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(
-                if (names.isEmpty()) "None yet. Pick the apps Mo should keep an eye on." else names.joinToString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FilledTonalButton(onClick = onOpenApps) { Text("Choose apps") }
-        }
-    }
-}
-
-@Composable
-private fun DisplayCard() {
-    val settings = LocalContext.current.app.settings
-    var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
-    var bubble by remember { mutableStateOf(settings.bubble) }
-    Panel {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("On screen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ToggleRow(
-                "Around the camera",
-                "While you're in a tracked app: Mo, the live timer and today's count. Long-press Mo to hide for an hour.",
-                cameraPatch,
-            ) {
-                cameraPatch = it
-                settings.cameraPatch = it
-            }
-            ToggleRow("Floating bubble", "Mo with a count badge. Drag it anywhere, tap for details.", bubble) {
-                bubble = it
-                settings.bubble = it
-            }
-            Text(
-                "The notification and home screen widget always show the count.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DiagnosticsCard() {
-    val context = LocalContext.current
-    val settings = context.app.settings
-    var enabled by remember { mutableStateOf(settings.diagnosticsEnabled) }
-    Panel {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Diagnostics", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ToggleRow(
-                "Share diagnostic data",
-                "Send crash reports and technical accessibility-service events to help diagnose counting issues. Screen contents are not collected.",
-                enabled,
-            ) {
-                enabled = it
-                settings.diagnosticsEnabled = it
-                FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(it)
-                FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(it)
-            }
-        }
-    }
-}
-
-/** How Mo behaves: when to be quiet, bringing things up, check-ins, and what Mo remembers. */
-@Composable
-private fun MoCard(onOpenMemories: () -> Unit) {
-    val app = LocalContext.current.app
-    val store = app.moPrefs
-    val policy = remember { MoPolicy(store) }
-    var quietAtNight by remember { mutableStateOf(store.profile.quietHours != null) }
-    var initiatives by remember { mutableStateOf(store.profile.initiatives) }
-    var snoozedUntil by remember { mutableStateOf(policy.snoozedUntil(System.currentTimeMillis())) }
-    var checkInAt by remember { mutableStateOf<Long?>(null) }
-    Panel {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Mo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            ToggleRow("Quiet at night", "No speech bubbles from 10 pm to 8 am. Mo still counts.", quietAtNight) {
-                quietAtNight = it
-                store.profile = store.profile.copy(quietHours = if (it) QuietHours.NIGHT else null)
-            }
-            ToggleRow(
-                "Mo brings things up",
-                "Now and then, at most a few times a day: something Mo remembers, or a bit of Mo's own life.",
-                initiatives,
-            ) {
-                initiatives = it
-                store.profile = store.profile.copy(initiatives = it)
-            }
-            val until = snoozedUntil
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (until == null) {
-                    Text("Need Mo to hush for a bit?", Modifier.weight(1f))
-                    FilledTonalButton(onClick = {
-                        val now = System.currentTimeMillis()
-                        policy.snooze(now, SNOOZE_MS)
-                        snoozedUntil = policy.snoozedUntil(now)
-                    }) { Text("Quiet for an hour") }
-                } else {
-                    Text("Quiet until ${clockTime(until)}", Modifier.weight(1f))
-                    TextButton(onClick = {
-                        policy.unsnooze()
-                        snoozedUntil = null
-                    }) { Text("Let Mo talk") }
-                }
-            }
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                val due = checkInAt
-                Text(if (due == null) "Check in with me in" else "Mo will check in at ${clockTime(due)}", Modifier.weight(1f))
-                CHECK_IN_MINUTES.forEach { minutes ->
-                    TextButton(onClick = {
-                        val checkIn = MoMemories.checkIn(System.currentTimeMillis(), minutes)
-                        checkInAt = checkIn.dueAt
-                        app.appScope.launch { app.moMemories.add(checkIn) }
-                    }) { Text(if (minutes < 60) "$minutes min" else "${minutes / 60} h") }
-                }
-            }
-            TextButton(onClick = onOpenMemories) { Text("What Mo remembers") }
-        }
-    }
-}
-
-private val CHECK_IN_MINUTES = listOf(30L, 60L)
-
-private const val SNOOZE_MS = 60 * 60_000L
-
-@Composable
-private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
