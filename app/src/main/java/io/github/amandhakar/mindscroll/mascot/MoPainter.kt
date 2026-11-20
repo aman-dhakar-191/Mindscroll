@@ -59,6 +59,10 @@ object MoPainter {
         if (pose.peek > 0f) {
             canvas.translate(s * 0.12f * pose.peek, 0f)
         }
+        if (pose.exit > 0f) {
+            canvas.translate(-s * 0.10f * pose.exit, 0f)
+            canvas.rotate(-8f * pose.exit, s * 0.5f, s * 0.94f)
+        }
         // Whole-body motion, pivoting on the bottom middle.
         val pivotX = s * 0.5f
         val pivotY = s * 0.94f
@@ -85,7 +89,11 @@ object MoPainter {
             canvas.scale(1 - 0.035f * pose.anticipation, 1 + 0.045f * pose.anticipation, pivotX, pivotY)
         }
         // Surprise: squash down and spread out, like landing a hop.
-        if (surprised) canvas.scale(1 + 0.1f * pose.react, 1 - 0.14f * pose.react, pivotX, pivotY)
+        if (surprised) {
+            // A gentle hop peaks with the facial surprise, then settles with the squash.
+            canvas.translate(0f, -s * 0.045f * kotlin.math.sin(pose.react.coerceIn(0f, 1f) * Math.PI).toFloat())
+            canvas.scale(1 + 0.12f * pose.react, 1 - 0.16f * pose.react, pivotX, pivotY)
+        }
         // Mood changes settle with a small, soft bounce rather than snapping instantly.
         if (pose.moodTransition < 1f) {
             val settle = kotlin.math.sin((1f - pose.moodTransition) * Math.PI).toFloat()
@@ -133,7 +141,7 @@ object MoPainter {
                 canvas.drawArc(rect, 200f, 140f, false, stroke)
             }
         } else if (surprised) {
-            eyes.forEach { x -> wideEye(canvas, x, eyeY, s * 0.09f, blink) }
+            eyes.forEach { x -> wideEye(canvas, x, eyeY, s * (0.09f + 0.012f * pose.react), blink) }
         } else when (mood) {
             Mood.CHILL -> eyes.forEach { x -> // happy closed eyes: ∩
                 rect.set(x - s * 0.07f, eyeY - s * 0.05f, x + s * 0.07f, eyeY + s * 0.07f)
@@ -177,7 +185,7 @@ object MoPainter {
             rect.set(s * 0.5f - open * 0.7f, mouthY - open * 0.8f, s * 0.5f + open * 0.7f, mouthY + open)
             canvas.drawOval(rect, fill)
         } else if (surprised) {
-            val open = s * (0.04f + 0.03f * pose.react)
+            val open = s * (0.045f + 0.045f * pose.react)
             rect.set(s * 0.5f - open * 0.8f, mouthY - open, s * 0.5f + open * 0.8f, mouthY + open)
             canvas.drawOval(rect, fill)
         } else when (mood) {
@@ -320,6 +328,8 @@ class MoView @JvmOverloads constructor(
     private var wakeStart: Long? = null
     private var moodChangedAt: Long? = null
     private var peekStart: Long? = null
+    private var exitStart: Long? = null
+    private var reactionIntensity: Float = 1f
     private var previousMoodColor: Int = mood.color.toInt()
 
     private val blinker = object : Runnable {
@@ -331,8 +341,15 @@ class MoView @JvmOverloads constructor(
     }
 
     /** A new reel counted: Mo looks surprised for a moment. */
-    fun react() {
+    fun react(intensity: Float = 1f) {
+        reactionIntensity = intensity.coerceIn(0.8f, 1.5f)
         reactStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    /** Mo gives a brief, gentle farewell as a tracked app closes. */
+    fun exitSession() {
+        exitStart = SystemClock.uptimeMillis()
         invalidate()
     }
 
@@ -363,7 +380,7 @@ class MoView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         val now = SystemClock.uptimeMillis()
         val size = minOf(width, height).toFloat()
-        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart, mood, moodChangedAt, peekStart)
+        val pose = MoMotion.pose(now, blinkStart, reactStart, idleMotion, asleep, wakeStart, mood, moodChangedAt, peekStart, reactionIntensity, exitStart)
         MoPainter.draw(canvas, size, mood, (width - size) / 2, (height - size) / 2, pose, previousMoodColor)
 
         val blinking = blinkStart?.let { now - it < MoMotion.BLINK_MS } ?: false
@@ -371,8 +388,9 @@ class MoView @JvmOverloads constructor(
         val waking = wakeStart?.let { now - it < MoMotion.WAKE_MS } ?: false
         val changingMood = moodChangedAt?.let { now - it < MoMotion.MOOD_TRANSITION_MS } ?: false
         val peeking = peekStart?.let { now - it < MoMotion.PEEK_MS } ?: false
+        val exiting = exitStart?.let { now - it < MoMotion.EXIT_MS } ?: false
         when {
-            blinking || reacting || waking || changingMood || peeking -> postInvalidateOnAnimation()
+            blinking || reacting || waking || changingMood || peeking || exiting -> postInvalidateOnAnimation()
             idleMotion -> postInvalidateDelayed(IDLE_FRAME_MS)
         }
     }

@@ -81,6 +81,9 @@ class CounterOverlay(
     private var lastSessionPackage: String? = null
     private var lastSessionEndedAtMs: Long? = null
     private var hasSeenSession = false
+    private var exitPending = false
+    private var pendingPatchReaction: SessionReaction? = null
+    private val finishExit = Runnable { exitPending = false; refresh() }
     private var inCall = false
     /** Long-pressing the patch hides it until this time (uptime ms). */
     private var snoozedUntil = 0L
@@ -106,7 +109,14 @@ class CounterOverlay(
         display = newDisplay
 
         if (patchWanted()) {
-            val views = patch ?: addPatch()?.also { patch = it; it.mo.asleep = moAsleep }
+            val views = patch ?: addPatch()?.also {
+                patch = it
+                it.mo.asleep = moAsleep
+                pendingPatchReaction?.let { reaction ->
+                    playSessionReaction(it.mo, reaction)
+                    pendingPatchReaction = null
+                }
+            }
             views?.let {
                 it.mo.mood = newState.mood
                 it.mo.idleMotion = screenOn && display.motionStyle != Settings.MotionStyle.CALM
@@ -155,7 +165,7 @@ class CounterOverlay(
             isPortrait() &&
             !inCall &&
             SystemClock.uptimeMillis() >= snoozedUntil &&
-            session != null
+            (session != null || exitPending)
 
     /** Re-applies what's on screen after something that affects it changed. */
     private fun refresh() {
@@ -375,25 +385,28 @@ class CounterOverlay(
         session = newSession
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
+            if (reaction == SessionReaction.APP_EXIT) {
+                exitPending = true
+                patch?.mo?.exitSession()
+                bubble?.mo?.exitSession()
+                handler.removeCallbacks(finishExit)
+                handler.postDelayed(finishExit, MoMotion.EXIT_MS)
+            }
         } else {
+            handler.removeCallbacks(finishExit)
+            exitPending = false
             lastSessionPackage = newSession.packageName
             lastSessionEndedAtMs = null
             hasSeenSession = true
             // Each edge gets its own small gesture; no reaction on ordinary state refreshes.
             when (reaction) {
-                SessionReaction.FIRST_ENTRY -> {
-                    patch?.mo?.peek()
-                    bubble?.mo?.peek()
+                SessionReaction.FIRST_ENTRY, SessionReaction.APP_SWITCH, SessionReaction.RETURN_AFTER_BREAK -> {
+                    val patchMo = patch?.mo
+                    if (patchMo != null) playSessionReaction(patchMo, reaction)
+                    else pendingPatchReaction = reaction
+                    bubble?.mo?.let { playSessionReaction(it, reaction) }
                 }
-                SessionReaction.APP_SWITCH -> {
-                    patch?.mo?.react()
-                    bubble?.mo?.react()
-                }
-                SessionReaction.RETURN_AFTER_BREAK -> {
-                    patch?.mo?.wakeUp()
-                    bubble?.mo?.wakeUp()
-                }
-                SessionReaction.NONE -> Unit
+                SessionReaction.APP_EXIT, SessionReaction.NONE -> Unit
             }
         }
 
@@ -401,8 +414,21 @@ class CounterOverlay(
             bindSession(it)
             layoutPatch(it, apply = true)
         }
-        // Entering or leaving a tracked app can show or hide the patch.
-        refresh()
+        // Keep the camera island alive for Mo's farewell, then remove it after the animation.
+        if (newSession != null || !exitPending) refresh()
+    }
+
+    private fun playSessionReaction(mo: MoView, reaction: SessionReaction) {
+        when (reaction) {
+            SessionReaction.FIRST_ENTRY -> mo.peek()
+            SessionReaction.APP_SWITCH -> mo.react(
+                if (display.motionStyle == Settings.MotionStyle.PLAYFUL) 1.25f else 1.1f,
+            )
+            SessionReaction.RETURN_AFTER_BREAK -> {
+                if (mo.asleep) mo.wakeUp() else mo.peek()
+            }
+            SessionReaction.APP_EXIT, SessionReaction.NONE -> Unit
+        }
     }
 
     private fun bindSession(views: PatchViews) {
@@ -702,7 +728,12 @@ class CounterOverlay(
 
     /** When the count goes up: the number pops, and Mo hops and looks surprised. */
     private fun bump(count: View, mo: MoView) {
-        mo.react()
+        val intensity = when (display.motionStyle) {
+            Settings.MotionStyle.CALM -> 1.0f
+            Settings.MotionStyle.BALANCED -> 1.18f
+            Settings.MotionStyle.PLAYFUL -> 1.42f
+        }
+        mo.react(intensity)
         count.animate().cancel()
         count.scaleX = 1.35f
         count.scaleY = 1.35f

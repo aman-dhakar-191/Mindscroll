@@ -21,6 +21,8 @@ data class MoPose(
     val moodTransition: Float = 1f,
     /** 0 = still, 1 = leaning out for a quick curious peek. */
     val peek: Float = 0f,
+    val reactionIntensity: Float = 1f,
+    val exit: Float = 0f,
 )
 
 /** The visual meaning of a tracked-app session transition. */
@@ -29,6 +31,7 @@ enum class SessionReaction {
     FIRST_ENTRY,
     APP_SWITCH,
     RETURN_AFTER_BREAK,
+    APP_EXIT,
 }
 
 /** Timing for Mo's animations, shared by the app (Compose) and the overlays (views). */
@@ -44,6 +47,7 @@ object MoMotion {
     const val ANTICIPATION_MS = 90L
     const val MOOD_TRANSITION_MS = 420L
     const val PEEK_MS = 680L
+    const val EXIT_MS = 720L
     const val RETURN_BREAK_THRESHOLD_MS = 5 * 60_000L
 
     /**
@@ -57,7 +61,9 @@ object MoMotion {
         nowMs: Long,
         hasSeenSession: Boolean,
     ): SessionReaction {
-        if (currentPackage == null) return SessionReaction.NONE
+        if (currentPackage == null) {
+            return if (hasSeenSession && previousPackage != null) SessionReaction.APP_EXIT else SessionReaction.NONE
+        }
         if (!hasSeenSession) return SessionReaction.FIRST_ENTRY
         if (endedAtMs != null && nowMs - endedAtMs >= RETURN_BREAK_THRESHOLD_MS) {
             return SessionReaction.RETURN_AFTER_BREAK
@@ -117,6 +123,13 @@ object MoMotion {
         }
     }
 
+    /** A small lean and turn as Mo notices the tracked app closing. */
+    fun exit(sinceExitMs: Long): Float {
+        if (sinceExitMs < 0 || sinceExitMs >= EXIT_MS) return 0f
+        val t = sinceExitMs.toFloat() / EXIT_MS
+        return smoothStep(1f - t)
+    }
+
     /** Irregular gaps between blinks look alive; a fixed rhythm looks mechanical. */
     fun nextBlinkDelayMs(random: Random = Random): Long = 2200L + random.nextLong(3200L)
 
@@ -130,6 +143,8 @@ object MoMotion {
         mood: Mood = Mood.CHILL,
         moodChangedAtMs: Long? = null,
         peekStartMs: Long? = null,
+        reactionIntensity: Float = 1f,
+        exitStartMs: Long? = null,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
         val sinceReact = reactStartMs?.let { timeMs - it }
@@ -147,7 +162,7 @@ object MoMotion {
         return MoPose(
             phase = loop,
             blink = if (asleep) 0f else blinkStartMs?.let { blink(timeMs - it) } ?: 0f,
-            react = sinceReact?.let { react(it - ANTICIPATION_MS) } ?: 0f,
+            react = (sinceReact?.let { react(it - ANTICIPATION_MS) } ?: 0f) * reactionIntensity.coerceIn(0.8f, 1.5f),
             sleep = when {
                 asleep -> 1f
                 sinceWake != null -> wakingSleep(sinceWake)
@@ -161,6 +176,8 @@ object MoMotion {
                 smoothStep(((timeMs - it).toFloat() / MOOD_TRANSITION_MS).coerceIn(0f, 1f))
             } ?: 1f,
             peek = peekStartMs?.let { peek(timeMs - it) } ?: 0f,
+            reactionIntensity = reactionIntensity,
+            exit = exitStartMs?.let { exit(timeMs - it) } ?: 0f,
         )
     }
 }
