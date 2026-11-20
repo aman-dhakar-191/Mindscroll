@@ -95,8 +95,8 @@ data class MotionProfile(
         )
         /** Snappy and springy: a longer crouch, a fast pop, a couple of rebounds. */
         val PLAYFUL = MotionProfile(
-            reactScale = 1.45f, anticipationMs = 220, riseMs = 130, settleMs = 1350, damping = 0.28f,
-            hop = 1.7f, idleAmplitude = 1.35f, idleFrameMs = 40, gestureSpeed = 0.85f, blinkGapScale = 0.7f,
+            reactScale = 1.45f, anticipationMs = 260, riseMs = 170, settleMs = 1500, damping = 0.28f,
+            hop = 1.7f, idleAmplitude = 1.35f, idleFrameMs = 40, gestureSpeed = 0.75f, blinkGapScale = 0.7f,
         )
     }
 }
