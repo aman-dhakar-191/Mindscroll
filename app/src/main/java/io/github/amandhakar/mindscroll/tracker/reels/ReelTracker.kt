@@ -20,9 +20,12 @@ class ReelTracker(
     override val title = "Reels"
     override val watchedPackages: Set<String> get() = TrackedApps.packages.value
 
-    /** A tracked app with its hints, or null if [packageName] isn't tracked. */
+    /**
+     * A tracked app with its hints, or null if reels aren't counted in [packageName]: it isn't
+     * tracked, or the user keeps it to the timer only (see [TrackedApps.countsReels]).
+     */
     private fun appFor(packageName: String): ReelApp? {
-        if (!TrackedApps.isTracked(packageName)) return null
+        if (!TrackedApps.countsReels(packageName)) return null
         val label = TrackedApps.label(packageName)
         return apps[packageName]?.takeIf { it.label == label }
             ?: ReelApps.forPackage(packageName, label).also { apps[packageName] = it }

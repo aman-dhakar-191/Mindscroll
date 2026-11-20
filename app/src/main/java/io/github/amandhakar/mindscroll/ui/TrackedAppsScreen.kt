@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,6 +58,8 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val settings = context.app.settings
     val tracked by TrackedApps.packages.collectAsStateWithLifecycle()
+    // Read so the rows recompose when the reel choice changes; TrackedApps.countsReels answers per app.
+    val reelChoice by TrackedApps.reelPackages.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     // Tracked apps first when the screen opens; they don't jump around while toggling.
     val initiallyTracked = remember { tracked }
@@ -76,8 +79,8 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
                 TextButton(onClick = onBack) { Text("Done") }
             }
             Text(
-                "Tracked apps get reel counting, screen time, the live timer and Mo's remarks. " +
-                    "Reels are counted in any app with a full-screen, one-at-a-time feed.",
+                "Tracked apps get screen time, the live timer and Mo's remarks. Reels are counted only " +
+                    "in apps set to count reels: Instagram and YouTube (including RVX) until you choose.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -108,6 +111,12 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
                             app = installedApp,
                             tracked = installedApp.packageName in tracked,
                             hasReelHints = installedApp.packageName in ReelApps.known,
+                            countsReels = reelChoice.let { TrackedApps.countsReels(installedApp.packageName) },
+                            onToggleReels = { on ->
+                                // Save the full choice, so apps still on the default keep what they show.
+                                val current = settings.trackedApps.filter(TrackedApps::countsReels).toSet()
+                                settings.reelApps = if (on) current + installedApp.packageName else current - installedApp.packageName
+                            },
                             onToggle = { on ->
                                 // Read the saved set, not the flow: it's current even between quick toggles.
                                 val now = settings.trackedApps
@@ -122,7 +131,14 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun AppRow(app: InstalledApp, tracked: Boolean, hasReelHints: Boolean, onToggle: (Boolean) -> Unit) {
+private fun AppRow(
+    app: InstalledApp,
+    tracked: Boolean,
+    hasReelHints: Boolean,
+    countsReels: Boolean,
+    onToggleReels: (Boolean) -> Unit,
+    onToggle: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val icon by produceState<ImageBitmap?>(null, app.packageName) {
         value = withContext(Dispatchers.IO) { appIcon(context, app.packageName) }
@@ -137,7 +153,18 @@ private fun AppRow(app: InstalledApp, tracked: Boolean, hasReelHints: Boolean, o
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(app.label, style = MaterialTheme.typography.bodyLarge)
-            if (hasReelHints) {
+            if (tracked) {
+                // Timer and screen time are for every tracked app; the reel counter is a choice.
+                TextButton(
+                    onClick = { onToggleReels(!countsReels) },
+                    contentPadding = PaddingValues(0.dp),
+                ) {
+                    Text(
+                        if (countsReels) "Counting reels · tap for timer only" else "Timer only · tap to count reels",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            } else if (hasReelHints) {
                 Text(
                     "Reel feed known",
                     style = MaterialTheme.typography.bodySmall,
