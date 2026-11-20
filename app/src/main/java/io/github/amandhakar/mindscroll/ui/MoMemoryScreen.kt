@@ -88,7 +88,7 @@ fun MoMemoryScreen(onBack: () -> Unit) {
 
 @Composable
 private fun MemoryRow(memory: Memory, onKeep: () -> Unit, onForget: () -> Unit) {
-    Card {
+    Panel {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(memory.content, fontWeight = FontWeight.SemiBold)
             Text(

@@ -3,6 +3,8 @@ package io.github.amandhakar.mindscroll.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
@@ -32,10 +35,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,8 +100,11 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (!permissions.accessibility) {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Card(
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                ) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Counting is off", fontWeight = FontWeight.SemiBold)
                         Text("Mindscroll's accessibility service is turned off, so new reels aren't counted.")
                         FilledTonalButton(onClick = onOpenSetup) { Text("Turn it back on") }
@@ -104,22 +112,13 @@ fun HomeScreen(
                 }
             }
 
-            Text(
-                Mo.greeting(LocalTime.now().hour, Days.today()),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            MoHeader(total, mood)
-
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(total.toString(), fontSize = 88.sp, fontWeight = FontWeight.Bold)
-                Text("${tracker.title.lowercase()} today", style = MaterialTheme.typography.titleMedium)
-            }
+            Hero(total, mood, tracker.title.lowercase())
 
             if (apps.isNotEmpty()) {
-                Card {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(Modifier.fillMaxWidth()) {
+                val maxReels = apps.maxOf { it.reels }.toFloat().coerceAtLeast(1f)
+                Panel {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text("Today", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(
                                 "${Durations.format(apps.sumOf { it.timeMs })} in apps",
@@ -127,25 +126,18 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        apps.forEach {
-                            Row(Modifier.fillMaxWidth()) {
-                                Text(it.label, Modifier.weight(1f))
-                                Text("${it.reels} reels", fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    "  ·  ${Durations.format(it.timeMs)}",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                        apps.forEach { AppRow(it, it.reels.toFloat() / maxReels) }
                     }
                 }
             }
 
             memory?.let { MemoryCard(MoMemory.insights(it)) }
             WeekCard(week)
+
+            SectionHeader("Customize")
             TrackedAppsCard(onOpenApps)
-            DiagnosticsCard()
             MoCard(onOpenMemories)
+            DiagnosticsCard()
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
                 TextButton(onClick = onOpenSetup) { Text("Permissions and setup") }
@@ -156,26 +148,102 @@ fun HomeScreen(
     }
 }
 
+/**
+ * The top of the page: one mood-tinted card holding the greeting, Mo with their speech bubble,
+ * and today's count, so the screen opens on a single focal point instead of three loose pieces.
+ */
 @Composable
-private fun MoHeader(total: Long, mood: Mood) {
+private fun Hero(total: Long, mood: Mood, unit: String) {
     val rested = Mo.isRested(total, mood)
     val accent = Color(mood.color)
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        val style = LocalContext.current.app.settings.motionStyle
-        MoFace(mood, Modifier.size(88.dp), reactTo = total, profile = style.profile)
-        Card(
-            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp),
-            colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.18f)),
-            modifier = Modifier.weight(1f),
-        ) {
-            Column(Modifier.padding(14.dp)) {
-                Text(
-                    "${Mo.NAME} · ${mood.title}".uppercase(),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(Mo.line(total, LocalTime.now().hour, mood, rested), style = MaterialTheme.typography.bodyLarge)
+    val style = LocalContext.current.app.settings.motionStyle
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.extraLarge)
+            .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.06f))))
+            .padding(20.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text(
+                Mo.greeting(LocalTime.now().hour, Days.today()),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MoFace(mood, Modifier.size(88.dp), reactTo = total, profile = style.profile)
+                Surface(
+                    shape = RoundedCornerShape(topStart = 4.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "${Mo.NAME} · ${mood.title}".uppercase(),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(Mo.line(total, LocalTime.now().hour, mood, rested), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
             }
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    total.toString(),
+                    fontSize = 72.sp,
+                    lineHeight = 72.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-1).sp,
+                )
+                Text(
+                    "$unit today",
+                    Modifier.padding(start = 10.dp, bottom = 12.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** One app: its name and numbers, over a bar showing its share of the busiest app's reels. */
+@Composable
+private fun AppRow(stat: AppStat, share: Float) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stat.label,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text("${stat.reels} reels", fontWeight = FontWeight.SemiBold)
+            Text(
+                "  ·  ${Durations.format(stat.timeMs)}",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(share.coerceIn(0.03f, 1f))
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+            )
         }
     }
 }
@@ -183,8 +251,8 @@ private fun MoHeader(total: Long, mood: Mood) {
 @Composable
 private fun MemoryCard(insights: List<String>) {
     if (insights.isEmpty()) return
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("${Mo.NAME} remembers", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             insights.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
         }
@@ -196,8 +264,8 @@ private fun WeekCard(week: List<DayTotal>) {
     if (week.isEmpty()) return
     val max = week.maxOf { it.total }.coerceAtLeast(1)
     val today = LocalDate.now().toEpochDay()
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Last 7 days", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(
                 Modifier.fillMaxWidth().height(120.dp),
@@ -210,23 +278,32 @@ private fun WeekCard(week: List<DayTotal>) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Bottom,
                     ) {
-                        Text(day.total.toString(), style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            day.total.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (day.day == today) FontWeight.Bold else FontWeight.Normal,
+                            color = if (day.day == today) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(4.dp))
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .fillMaxHeight(0.75f * day.total / max + 0.02f)
-                                .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 3.dp, bottomEnd = 3.dp))
                                 .background(
                                     if (day.day == today) {
                                         MaterialTheme.colorScheme.primary
                                     } else {
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
                                     },
                                 ),
                         )
+                        Spacer(Modifier.height(6.dp))
                         Text(
                             LocalDate.ofEpochDay(day.day).dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
                             style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (day.day == today) FontWeight.Bold else FontWeight.Normal,
+                            color = if (day.day == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
                     }
@@ -240,8 +317,8 @@ private fun WeekCard(week: List<DayTotal>) {
 private fun TrackedAppsCard(onOpenApps: () -> Unit) {
     val tracked by TrackedApps.packages.collectAsStateWithLifecycle()
     val names = tracked.map(TrackedApps::label).sorted()
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Apps to track", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text(
                 if (names.isEmpty()) "None yet. Pick the apps Mo should keep an eye on." else names.joinToString(),
@@ -258,8 +335,8 @@ private fun DisplayCard() {
     val settings = LocalContext.current.app.settings
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("On screen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             ToggleRow(
                 "Around the camera",
@@ -287,8 +364,8 @@ private fun DiagnosticsCard() {
     val context = LocalContext.current
     val settings = context.app.settings
     var enabled by remember { mutableStateOf(settings.diagnosticsEnabled) }
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Diagnostics", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             ToggleRow(
                 "Share diagnostic data",
@@ -314,8 +391,8 @@ private fun MoCard(onOpenMemories: () -> Unit) {
     var initiatives by remember { mutableStateOf(store.profile.initiatives) }
     var snoozedUntil by remember { mutableStateOf(policy.snoozedUntil(System.currentTimeMillis())) }
     var checkInAt by remember { mutableStateOf<Long?>(null) }
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Mo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             ToggleRow("Quiet at night", "No speech bubbles from 10 pm to 8 am. Mo still counts.", quietAtNight) {
                 quietAtNight = it
