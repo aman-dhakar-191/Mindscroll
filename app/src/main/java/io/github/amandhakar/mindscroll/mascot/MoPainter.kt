@@ -134,7 +134,7 @@ object MoPainter {
         // The curl on top: a little scroll, as in "scroll". It perks up on surprise.
         stroke.color = body
         stroke.strokeWidth = s * 0.07f
-        path.reset()
+        path.rewind()
         path.moveTo(s * 0.5f, s * 0.2f)
         val curlLift = s * 0.02f * pose.react.coerceIn(0f, 1f)
         path.cubicTo(s * 0.5f, s * 0.06f - curlLift, s * 0.66f, s * 0.04f - curlLift, s * 0.68f, s * 0.12f - curlLift)
@@ -258,7 +258,7 @@ object MoPainter {
             stroke.color = body
             stroke.alpha = (255 * (1 - pose.phase * 0.8f)).toInt()
             stroke.strokeWidth = s * 0.04f
-            path.reset()
+            path.rewind()
             path.moveTo(s * 0.8f, s * 0.08f); path.lineTo(s * 0.92f, s * 0.08f)
             path.lineTo(s * 0.8f, s * 0.2f); path.lineTo(s * 0.92f, s * 0.2f)
             canvas.drawPath(path, stroke)
@@ -329,7 +329,7 @@ object MoPainter {
     }
 
     private fun spiral(canvas: Canvas, x: Float, y: Float, r: Float) {
-        path.reset()
+        path.rewind()
         val turns = 2.2
         val steps = 40
         for (i in 0..steps) {
@@ -347,7 +347,7 @@ object MoPainter {
     }
 
     private fun wave(canvas: Canvas, from: Float, to: Float, y: Float, amplitude: Float) {
-        path.reset()
+        path.rewind()
         path.moveTo(from, y)
         val step = (to - from) / 4
         for (i in 0 until 4) {
