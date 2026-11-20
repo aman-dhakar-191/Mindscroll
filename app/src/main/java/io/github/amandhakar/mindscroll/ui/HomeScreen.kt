@@ -68,6 +68,7 @@ fun HomeScreen(
     onOpenLog: () -> Unit,
     onOpenApps: () -> Unit,
     onOpenMemories: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val app = context.app
@@ -143,13 +144,13 @@ fun HomeScreen(
             memory?.let { MemoryCard(MoMemory.insights(it)) }
             WeekCard(week)
             TrackedAppsCard(onOpenApps)
-            DisplayCard()
             DiagnosticsCard()
             MoCard(onOpenMemories)
 
             Row(Modifier.align(Alignment.CenterHorizontally)) {
                 TextButton(onClick = onOpenSetup) { Text("Permissions and setup") }
                 TextButton(onClick = onOpenLog) { Text("Count looks wrong?") }
+                TextButton(onClick = onOpenSettings) { Text("Settings") }
             }
         }
     }

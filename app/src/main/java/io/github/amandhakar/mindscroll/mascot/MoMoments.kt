@@ -16,12 +16,12 @@ class MoMoments(private val policy: MoPolicy = MoPolicy()) {
     private val rotation = mutableMapOf<String, Long>()
 
     /** A reel was counted; today's total is now [total]. */
-    fun onReel(now: Long, total: Long): String? {
+    fun onReel(now: Long, total: Long, includeMilestones: Boolean = true): String? {
         lastReelAt = now
         recentReels.addLast(now)
         while (recentReels.isNotEmpty() && now - recentReels.first() > FAST_WINDOW_MS) recentReels.removeFirst()
 
-        Mo.milestoneSpoken[total]?.let { return say(now, it, big = true) }
+        if (includeMilestones) Mo.milestoneSpoken[total]?.let { return say(now, it, big = true) }
         if (recentReels.size >= FAST_COUNT && now - lastFastAt >= FAST_REPEAT_MS) {
             val line = say(now, next("fast", Mo.fastSwipes).fill(total, x = recentReels.size.toLong()))
             if (line != null) lastFastAt = now
