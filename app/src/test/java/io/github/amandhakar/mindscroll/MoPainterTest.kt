@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import io.github.amandhakar.mindscroll.mascot.MoMotion
 import io.github.amandhakar.mindscroll.mascot.MoPainter
+import io.github.amandhakar.mindscroll.mascot.MoProp
 import io.github.amandhakar.mindscroll.mascot.MoPose
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.mascot.Mood
@@ -133,6 +134,57 @@ class MoPainterTest {
                     assertFalse("$mood whirl slow=$slow t=$t touches the edge", bitmap.edgePixels() > 0)
                 }
             }
+        }
+    }
+
+    @Test
+    fun theSideEyeLooksDifferentAndNeverClips() {
+        for (mood in Mood.entries) {
+            val rest = render(mood, MoPose(brow = MoMotion.baseBrow(mood), smile = MoMotion.baseSmile(mood)))
+            val eye = render(mood, MoMotion.pose(2000 + MoMotion.SIDE_EYE_MS / 2, null, null, false, mood = mood, sideEyeStartMs = 2000))
+            assertTrue("$mood side-eye differs from rest", rest.differsFrom(eye))
+            for (t in 0L until MoMotion.SIDE_EYE_MS step 60) {
+                val b = render(mood, MoMotion.pose(2000 + t, null, null, false, mood = mood, sideEyeStartMs = 2000))
+                assertFalse("$mood side-eye t=$t touches the edge", b.edgePixels() > 0)
+            }
+        }
+    }
+
+    @Test
+    fun everyPropDrawsSomethingAndStaysInsideTheView() {
+        for (prop in MoProp.entries) for (mood in listOf(Mood.CHILL, Mood.SLEEPY, Mood.DIZZY)) {
+            val base = render(mood, MoMotion.pose(2000, null, null, false, mood = mood))
+            val mid = render(mood, MoMotion.pose(2000 + prop.durationMs / 2, null, null, false, mood = mood, propStartMs = 2000, propMask = prop.bit))
+            assertTrue("$prop on $mood changes the picture", base.differsFrom(mid))
+            for (t in 0L until prop.durationMs step 50) {
+                val b = render(mood, MoMotion.pose(2000 + t, null, null, false, mood = mood, propStartMs = 2000, propMask = prop.bit))
+                assertFalse("$prop on $mood t=$t touches the edge", b.edgePixels() > 0)
+            }
+        }
+    }
+
+    @Test
+    fun cryingWithLaughterKeepsTheLaughingFaceForAsLongAsTheTears() {
+        // With the reaction long over, tears on a worried Mo must still be a laughing face, not sadness.
+        for (mood in Mood.entries) {
+            val t = MoProp.TEARS.durationMs / 2
+            val tears = render(mood, MoMotion.pose(5000 + t, null, null, false, mood = mood, propStartMs = 5000, propMask = MoProp.TEARS.bit))
+            val laughing = render(mood, MoMotion.pose(5000 + t, null, 5000 + t - 40, false, mood = mood, reactExcited = true, propStartMs = 5000, propMask = MoProp.TEARS.bit))
+            val rest = render(mood, MoMotion.pose(5000 + t, null, null, false, mood = mood))
+            assertTrue("$mood tears change the face, not just add drops", tears.differsFrom(rest))
+            assertTrue("$mood laughing face differs from rest", laughing.differsFrom(rest))
+        }
+    }
+
+    @Test
+    fun propsTogetherStayInsideTheViewToo() {
+        val sets = listOf(
+            MoProp.SWEAT.bit or MoProp.SPEED_LINES.bit,
+            MoProp.QUESTION.bit or MoProp.EXCLAIM.bit,
+        )
+        for (mask in sets) for (t in 0L until 1_800L step 60) {
+            val b = render(Mood.CHILL, MoMotion.pose(2000 + t, null, null, false, mood = Mood.CHILL, propStartMs = 2000, propMask = mask))
+            assertFalse("mask $mask t=$t touches the edge", b.edgePixels() > 0)
         }
     }
 

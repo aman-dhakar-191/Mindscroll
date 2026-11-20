@@ -61,12 +61,19 @@ object MoPainter {
         val wave = sin(pose.phase * 2 * PI).toFloat()
         val asleep = pose.sleep > 0.5f
         val yawning = !asleep && pose.yawn > 0.25f
-        val excited = !asleep && !yawning && pose.excite > 0.35f && pose.whirl <= 0.35f
+        // Crying with laughter: the laughing face stays as long as the tears do, or the tears would
+        // read as sadness once the reaction's own grin has faded.
+        val tearing = !asleep && !yawning && pose.whirl <= 0.35f && pose.propMask and MoProp.TEARS.bit != 0 &&
+            MoMotion.propProgress(pose.propSinceMs, MoProp.TEARS).let { it >= 0f && it < 0.9f }
+        val excited = !asleep && !yawning && pose.whirl <= 0.35f && (pose.excite > 0.35f || tearing)
         val surprised = !asleep && !yawning && !excited && pose.whirl <= 0.35f && pose.react > 0.35f
         // Spiral eyes: scrolling too fast, or mesmerised by one reel. Takes over the face.
         val whirling = !asleep && !yawning && pose.whirl > 0.35f
+        // The side-eye: unamused half-lids, pupils slid sideways. A new reel (surprise) beats it.
+        val sideEyeing = !asleep && !yawning && !whirling && pose.sideEye > 0.35f &&
+            !(pose.react > 0.35f) && pose.excite <= 0.35f
         // Saying goodbye: eyes close in a smile as Mo turns away.
-        val farewell = !asleep && !yawning && !excited && !surprised && !whirling && pose.exit > 0.35f
+        val farewell = !asleep && !yawning && !excited && !surprised && !whirling && !sideEyeing && pose.exit > 0.35f
         val amp = pose.idleAmplitude
         // Eyelids still heavy while waking up.
         val blink = maxOf(pose.blink, pose.sleep)
@@ -164,7 +171,7 @@ object MoPainter {
         // Eyes open a little wider while Mo is paying attention.
         val attention = 1f + 0.3f * pose.peek + 0.2f * abs(pose.glance)
 
-        if (!asleep && (mood == Mood.CHILL || mood == Mood.CURIOUS || surprised || excited || farewell)) {
+        if (!asleep && !sideEyeing && (mood == Mood.CHILL || mood == Mood.CURIOUS || surprised || excited || farewell)) {
             fill.color = Color.argb(if (excited) 130 else 90, 255, 110, 140)
             rect.set(s * 0.15f, s * 0.6f, s * 0.29f, s * 0.69f); canvas.drawOval(rect, fill)
             rect.set(s * 0.71f, s * 0.6f, s * 0.85f, s * 0.69f); canvas.drawOval(rect, fill)
@@ -195,6 +202,8 @@ object MoPainter {
                 spiral(canvas, x, eyeY, s * 0.085f)
                 canvas.restore()
             }
+        } else if (sideEyeing) {
+            for (x in eyeX) sideEyeAt(canvas, x, eyeY, s * 0.075f, pose.sideEye, body)
         } else if (surprised) {
             for (x in eyeX) wideEye(canvas, x, eyeY, s * (0.09f + 0.012f * pose.react.coerceIn(0f, 1f)), blink)
         } else when (mood) {
@@ -233,11 +242,14 @@ object MoPainter {
             val open = s * (0.04f + 0.08f * pose.yawn)
             rect.set(s * 0.5f - open * 0.7f, mouthY - open * 0.8f, s * 0.5f + open * 0.7f, mouthY + open)
             canvas.drawOval(rect, fill)
+        } else if (sideEyeing) {
+            // Flat and a little crooked: "...".
+            canvas.drawLine(s * 0.41f, mouthY + s * 0.005f, s * 0.59f, mouthY - s * 0.012f, stroke)
         } else if (whirling) {
             wave(canvas, s * 0.36f, s * 0.64f, mouthY, s * 0.03f)
         } else if (excited) {
             // An open grin that widens with the joy.
-            val open = pose.excite.coerceIn(0f, 1f)
+            val open = (if (tearing) 1f else pose.excite).coerceIn(0f, 1f)
             rect.set(s * 0.37f, mouthY - s * 0.05f, s * 0.63f, mouthY - s * 0.05f + s * 0.17f * open)
             canvas.drawArc(rect, 0f, 180f, true, fill)
         } else if (surprised) {
@@ -265,6 +277,7 @@ object MoPainter {
                 canvas.drawOval(rect, fill)
             }
         }
+        if (pose.propMask != 0) props(canvas, s, pose, eyeY)
         canvas.restore()
 
         // A "z" floats up and fades, outside the body's sway: running on fumes, or asleep.
@@ -315,6 +328,156 @@ object MoPainter {
             )
         }
         stroke.strokeWidth = width
+    }
+
+    /** Sweat and tears: deep enough to show on every mood colour, light enough to read as water. */
+    private val WATER = intArrayOf(0xFF, 0x2E, 0x9B, 0xF2)
+    private val GRASS = 0xFF5CD65C.toInt()
+    private val blades = floatArrayOf(0.7f, 1f, 0.55f, 0.9f, 0.62f)
+
+    /**
+     * Comic props around Mo, the way a reaction meme adds a sweat drop or a question mark. White
+     * ones show on the dark patch; each pops in with a little overshoot and shrinks away.
+     */
+    private fun props(canvas: Canvas, s: Float, pose: MoPose, eyeY: Float) {
+        val width = stroke.strokeWidth
+        for (prop in MoProp.entries) {
+            if (pose.propMask and prop.bit == 0) continue
+            val t = MoMotion.propProgress(pose.propSinceMs, prop)
+            if (t < 0f) continue
+            val pop = MoMotion.propPop(t)
+            when (prop) {
+                MoProp.QUESTION -> {
+                    val cx = s * 0.84f
+                    val cy = s * 0.15f
+                    val r = s * 0.055f * pop
+                    canvas.save()
+                    canvas.rotate(10f * sin(t * 14f), cx, cy + r * 2f)
+                    stroke.color = Color.WHITE
+                    stroke.strokeWidth = s * 0.04f * pop.coerceAtMost(1.1f)
+                    rect.set(cx - r, cy - r, cx + r, cy + r)
+                    canvas.drawArc(rect, 180f, 220f, false, stroke)
+                    canvas.drawLine(cx + r * 0.77f, cy + r * 0.64f, cx, cy + r * 1.55f, stroke)
+                    fill.color = Color.WHITE
+                    canvas.drawCircle(cx, cy + r * 2.25f, s * 0.026f * pop, fill)
+                    canvas.restore()
+                }
+                MoProp.EXCLAIM -> {
+                    // Shakes as it lands, then holds still.
+                    val cx = s * 0.17f + s * 0.012f * sin(t * 60f) * (1f - t).coerceIn(0f, 1f)
+                    val top = s * 0.07f
+                    val len = s * 0.1f * pop
+                    stroke.color = Color.WHITE
+                    stroke.strokeWidth = s * 0.05f * pop.coerceAtMost(1.1f)
+                    canvas.drawLine(cx, top, cx, top + len, stroke)
+                    fill.color = Color.WHITE
+                    canvas.drawCircle(cx, top + len + s * 0.05f * pop, s * 0.03f * pop, fill)
+                }
+                MoProp.DOTS -> {
+                    fill.color = Color.WHITE
+                    for (k in 0..2) {
+                        // One dot at a time: "…"
+                        val appears = 0.1f + 0.15f * k
+                        if (t < appears) continue
+                        val bob = s * 0.012f * sin((t * 7f - k * 0.7f) * PI.toFloat())
+                        val grow = MoMotion.propPop(((t - appears) / 0.1f * 0.16f).coerceIn(0f, 0.16f)).coerceAtLeast(0f) *
+                            if (t > 0.8f) pop else 1f
+                        canvas.drawCircle(s * (0.7f + 0.09f * k), s * 0.14f + bob, s * 0.028f * grow, fill)
+                    }
+                }
+                MoProp.SWEAT -> {
+                    // Two drops slide down the temple, the second a beat behind, fading as they go.
+                    for (k in 0..1) {
+                        val local = ((t - 0.2f * k) / 0.7f).coerceIn(0f, 1f)
+                        if (local <= 0f || local >= 1f) continue
+                        val x = s * (if (k == 0) 0.2f else 0.8f)
+                        val y = s * (0.27f + 0.3f * local)
+                        drop(canvas, x, y, s * 0.042f * pop.coerceAtMost(1.1f), (255 * (1f - local * local)).toInt())
+                    }
+                }
+                MoProp.TEARS -> {
+                    // Streams of tears down both cheeks, laughing so hard Mo is crying.
+                    val fade = pop
+                    for (i in 0..1) {
+                        val out = if (i == 0) -1f else 1f
+                        stroke.color = Color.argb((190 * fade).toInt(), WATER[1], WATER[2], WATER[3])
+                        stroke.strokeWidth = s * 0.042f
+                        canvas.drawLine(eyeX[i] + out * s * 0.045f, eyeY + s * 0.05f, eyeX[i] + out * s * 0.09f, eyeY + s * 0.2f, stroke)
+                        fill.color = Color.argb((255 * fade).toInt(), WATER[1], WATER[2], WATER[3])
+                        for (k in 0..2) {
+                            val phase = (t * 2.2f + k / 3f) % 1f
+                            canvas.drawCircle(
+                                eyeX[i] + out * s * (0.045f + 0.045f * phase),
+                                eyeY + s * (0.05f + 0.2f * phase),
+                                s * 0.03f * (1f - phase * 0.4f),
+                                fill,
+                            )
+                        }
+                    }
+                }
+                MoProp.GRASS -> {
+                    // A tuft grows at each foot and stays a while: "touch grass".
+                    val grow = (t / 0.3f).coerceIn(0f, 1f) * pop.coerceAtMost(1f).coerceAtLeast(if (t < 0.8f) 1f else 0f)
+                    stroke.color = GRASS
+                    stroke.strokeWidth = s * 0.034f
+                    for (side in 0..1) {
+                        val baseX = s * (if (side == 0) 0.2f else 0.7f)
+                        for (b in blades.indices) {
+                            val x = baseX + s * 0.025f * b
+                            val h = s * 0.13f * blades[b] * grow
+                            val lean = (b - 2) * s * 0.012f
+                            canvas.drawLine(x, s * 0.945f, x + lean, s * 0.945f - h, stroke)
+                        }
+                    }
+                }
+                MoProp.SPEED_LINES -> {
+                    // Short streaks off both sides, streaming outward as they fade.
+                    stroke.color = Color.argb((210 * pop).toInt().coerceIn(0, 255), 255, 255, 255)
+                    stroke.strokeWidth = s * 0.022f
+                    for (k in 0..2) {
+                        val y = s * (0.34f + 0.15f * k)
+                        val shift = s * 0.03f * ((t * 4f + k * 0.33f) % 1f)
+                        canvas.drawLine(s * 0.055f - shift, y, s * 0.012f - shift * 0.4f, y, stroke)
+                        canvas.drawLine(s * 0.945f + shift, y, s * 0.988f + shift * 0.4f, y, stroke)
+                    }
+                }
+            }
+        }
+        stroke.strokeWidth = width
+        stroke.color = INK
+        fill.color = INK
+    }
+
+    /** A teardrop: sweat or a tear, point up. */
+    private fun drop(canvas: Canvas, x: Float, y: Float, r: Float, alpha: Int) {
+        fill.color = Color.argb(alpha.coerceIn(0, 255), WATER[1], WATER[2], WATER[3])
+        canvas.drawCircle(x, y, r, fill)
+        path.rewind()
+        path.moveTo(x - r * 0.85f, y - r * 0.5f)
+        path.lineTo(x, y - r * 2.1f)
+        path.lineTo(x + r * 0.85f, y - r * 0.5f)
+        path.close()
+        canvas.drawPath(path, fill)
+    }
+
+    /**
+     * An unamused eye: white, with the pupil slid to the side ([look] 0..1) and a flat lid cut
+     * across the top. The lid is the body's colour, so it reads as a heavy eyelid.
+     */
+    private fun sideEyeAt(canvas: Canvas, x: Float, y: Float, r: Float, look: Float, lid: Int) {
+        val ry = r * 0.85f
+        fill.color = Color.WHITE
+        rect.set(x - r, y - ry, x + r, y + ry)
+        canvas.drawOval(rect, fill)
+        fill.color = INK
+        canvas.drawCircle(x + look * r * 0.52f, y + ry * 0.12f, r * 0.46f, fill)
+        // The lid: a flat cut across the upper part of the eye, with its edge drawn in.
+        fill.color = lid
+        rect.set(x - r - 2f, y - ry - 2f, x + r + 2f, y - ry * 0.2f)
+        canvas.drawRect(rect, fill)
+        stroke.color = INK
+        canvas.drawLine(x - r, y - ry * 0.2f, x + r, y - ry * 0.2f, stroke)
+        fill.color = INK
     }
 
     /** A dark eye with a glint, squashed shut by [blink]. */
@@ -434,6 +597,10 @@ class MoView @JvmOverloads constructor(
     private var yawnStart: Long? = null
     private var whirlStart: Long? = null
     private var whirlSlow = false
+    private var sideEyeStart: Long? = null
+    private var propStart: Long? = null
+    private var propMask = 0
+    private var propLengthMs = 0L
     private val idle = MoIdle()
     private var lastIdleBehavior: IdleBehavior? = null
     private var reactExcited = false
@@ -460,7 +627,8 @@ class MoView @JvmOverloads constructor(
                 running(reactStart, reactLengthMs, now) || running(peekStart, effectiveProfile.peekMs, now) ||
                 running(glanceStart, effectiveProfile.glanceMs, now) || running(exitStart, effectiveProfile.exitMs, now) ||
                 running(wakeStart, MoMotion.WAKE_MS, now) || running(yawnStart, MoMotion.WAKE_MS, now) ||
-                running(whirlStart, MoMotion.whirlDurationMs(whirlSlow), now)
+                running(whirlStart, MoMotion.whirlDurationMs(whirlSlow), now) ||
+                running(sideEyeStart, MoMotion.SIDE_EYE_MS, now) || running(propStart, propLengthMs, now)
             if (!busy && idleMotion) {
                 val behavior = idle.pick(mood, java.time.LocalTime.now().hour, lastIdleBehavior)
                 lastIdleBehavior = behavior
@@ -500,7 +668,7 @@ class MoView @JvmOverloads constructor(
     private fun pose(now: Long, idle: Boolean = idleMotion && !reducedMotion): MoPose = MoMotion.pose(
         now, blinkStart, reactStart, idle, asleep, wakeStart, mood, moodChangedAt, peekStart, reactionIntensity,
         exitStart, effectiveProfile, reactFrom, reactExcited, glanceStart, peekCarry, exitCarry, glanceCarry,
-        reactProfile, yawnStart, whirlStart, whirlSlow,
+        reactProfile, yawnStart, whirlStart, whirlSlow, sideEyeStart, propStart, propMask,
     )
 
     /**
@@ -562,6 +730,22 @@ class MoView @JvmOverloads constructor(
         invalidate()
     }
 
+    /** The side-eye: flat half-lids, pupils slid to the side. "You good?" */
+    fun sideEye() {
+        if (asleep) return
+        sideEyeStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    /** Pops comic props around Mo (a sweat drop, a "?!", tears), all starting together. */
+    fun props(vararg which: MoProp) {
+        if (asleep || which.isEmpty()) return
+        propMask = which.fold(0) { mask, prop -> mask or prop.bit }
+        propLengthMs = which.maxOf { it.durationMs }
+        propStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
     /** A big stretch and yawn without falling asleep: a long stretch of scrolling, or boredom. */
     fun stretch() {
         if (asleep) return
@@ -572,7 +756,13 @@ class MoView @JvmOverloads constructor(
     /** "Wait, again?": a quick sideways look, then a lean in. */
     fun doubleTake() {
         glance()
-        postDelayed({ if (!asleep) peek() }, DOUBLE_TAKE_GAP_MS)
+        // The "?!" lands with the second look.
+        postDelayed({
+            if (!asleep) {
+                peek()
+                props(MoProp.QUESTION, MoProp.EXCLAIM)
+            }
+        }, DOUBLE_TAKE_GAP_MS)
     }
 
     /** Wakes Mo up, if asleep: eyes open slowly through a big yawn and a stretch. */
@@ -614,6 +804,8 @@ class MoView @JvmOverloads constructor(
             running(reactStart, reactLengthMs) ||
             running(yawnStart, MoMotion.WAKE_MS) ||
             running(whirlStart, MoMotion.whirlDurationMs(whirlSlow)) ||
+            running(sideEyeStart, MoMotion.SIDE_EYE_MS) ||
+            running(propStart, propLengthMs) ||
             running(wakeStart, MoMotion.WAKE_MS) ||
             running(moodChangedAt, MoMotion.MOOD_TRANSITION_MS) ||
             running(peekStart, p.peekMs) ||

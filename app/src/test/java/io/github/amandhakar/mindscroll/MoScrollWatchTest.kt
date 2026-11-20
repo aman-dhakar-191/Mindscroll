@@ -3,7 +3,9 @@ package io.github.amandhakar.mindscroll
 import io.github.amandhakar.mindscroll.mascot.MoMoments
 import io.github.amandhakar.mindscroll.mascot.MoMotion
 import io.github.amandhakar.mindscroll.mascot.MoPolicy
+import io.github.amandhakar.mindscroll.mascot.MoProp
 import io.github.amandhakar.mindscroll.mascot.MoScrollWatch
+import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.mascot.ScrollPattern
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -224,5 +226,68 @@ class MoScrollWatchTest {
         val done = MoMotion.pose(1_000 + MoMotion.WHIRL_FAST_MS, null, null, false, whirlStartMs = 1_000)
         assertEquals(0f, done.whirl, 0f)
         assertEquals(rest.brow, done.brow, 0.0001f)
+    }
+
+    // --- Meme props and the side-eye ---
+
+    @Test
+    fun aPropPopsInWithOvershootHoldsThenShrinksAway() {
+        assertEquals(0f, MoMotion.propPop(0f), 0.001f)
+        val pop = (0..160).map { MoMotion.propPop(it / 1000f) }
+        assertTrue("overshoots a little", pop.max() > 1.02f && pop.max() < 1.2f)
+        assertEquals(1f, MoMotion.propPop(0.16f), 0.001f)
+        assertEquals(1f, MoMotion.propPop(0.5f), 0f)
+        assertEquals(0f, MoMotion.propPop(1f), 0.001f)
+        assertEquals(0f, MoMotion.propPop(-1f), 0f)
+        val all = (0..1000).map { MoMotion.propPop(it / 1000f) }
+        assertTrue(all.zipWithNext().maxOf { (a, b) -> kotlin.math.abs(b - a) } < 0.08f)
+    }
+
+    @Test
+    fun aPropIsOnlyShowingWithinItsOwnLength() {
+        assertEquals(-1f, MoMotion.propProgress(-1, MoProp.QUESTION), 0f)
+        assertEquals(0f, MoMotion.propProgress(0, MoProp.QUESTION), 0f)
+        val q = MoProp.QUESTION
+        assertEquals(0.5f, MoMotion.propProgress(q.durationMs / 2, q), 0.001f)
+        assertEquals(-1f, MoMotion.propProgress(q.durationMs, q), 0f)
+    }
+
+    @Test
+    fun propsComeInTogetherAndTheMaskClearsWhenTheyAreAllDone() {
+        val mask = MoProp.SWEAT.bit or MoProp.SPEED_LINES.bit
+        val during = MoMotion.pose(1_100, null, null, false, propStartMs = 1_000, propMask = mask)
+        assertEquals(mask, during.propMask)
+        assertEquals(100L, during.propSinceMs)
+        val longest = maxOf(MoProp.SWEAT.durationMs, MoProp.SPEED_LINES.durationMs)
+        val after = MoMotion.pose(1_000 + longest, null, null, false, propStartMs = 1_000, propMask = mask)
+        assertEquals(0, after.propMask)
+        assertEquals(-1L, after.propSinceMs)
+        assertEquals(0, MoMotion.pose(1_000, null, null, false).propMask)
+    }
+
+    @Test
+    fun everyPropHasItsOwnBit() {
+        val bits = MoProp.entries.map { it.bit }
+        assertEquals(bits.size, bits.toSet().size)
+        assertTrue(bits.all { Integer.bitCount(it) == 1 })
+    }
+
+    @Test
+    fun theSideEyeEasesInHoldsAndOut() {
+        assertEquals(0f, MoMotion.sideEye(0), 0.001f)
+        assertEquals(1f, MoMotion.sideEye(MoMotion.SIDE_EYE_MS / 2), 0.001f)
+        assertEquals(0f, MoMotion.sideEye(MoMotion.SIDE_EYE_MS), 0f)
+        val v = (0L until MoMotion.SIDE_EYE_MS step 16).map { MoMotion.sideEye(it) }
+        assertTrue(v.zipWithNext().maxOf { (a, b) -> kotlin.math.abs(b - a) } < 0.2f)
+    }
+
+    @Test
+    fun theSideEyeIsUnamusedNotHappy() {
+        val rest = MoMotion.pose(1_000, null, null, false, mood = Mood.CHILL)
+        val eye = MoMotion.pose(1_000 + MoMotion.SIDE_EYE_MS / 2, null, null, false,
+            mood = Mood.CHILL, sideEyeStartMs = 1_000)
+        assertEquals(1f, eye.sideEye, 0.001f)
+        assertTrue(eye.smile < rest.smile - 0.4f)
+        assertTrue(eye.brow < rest.brow)
     }
 }
