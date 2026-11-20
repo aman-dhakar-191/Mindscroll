@@ -36,6 +36,7 @@ import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
 import io.github.amandhakar.mindscroll.mascot.MoTemperament
+import io.github.amandhakar.mindscroll.mascot.ScrollPattern
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.mascot.SessionReaction
 import io.github.amandhakar.mindscroll.mascot.Mood
@@ -224,6 +225,33 @@ class CounterOverlay(
         moAsleep = asleep
         patch?.mo?.asleep = asleep
         bubble?.mo?.asleep = asleep
+    }
+
+    /**
+     * Mo reacts to a habit: dizzy spiral eyes for scrolling too fast, a lean in for lingering on
+     * one reel, slow spirals when staring at it for ages, a stretch after a long stretch of
+     * scrolling, and a double take for coming straight back.
+     */
+    fun onPattern(pattern: ScrollPattern) {
+        val views = listOfNotNull(patch?.mo, bubble?.mo)
+        DetectionLog.add(
+            "mo: ${pattern.label} → " + when (pattern) {
+                ScrollPattern.TOO_FAST -> "dizzy: fast spiral eyes and a wobble"
+                ScrollPattern.LINGERING -> "leans in: hmm?"
+                ScrollPattern.STARING -> "mesmerised: slow spiral eyes"
+                ScrollPattern.MARATHON -> "stretch and yawn"
+                ScrollPattern.QUICK_RETURN -> "double take"
+            } + " (${views.size} view${if (views.size == 1) "" else "s"})",
+        )
+        views.forEach { mo ->
+            when (pattern) {
+                ScrollPattern.TOO_FAST -> mo.whirl(slow = false)
+                ScrollPattern.LINGERING -> mo.peek()
+                ScrollPattern.STARING -> mo.whirl(slow = true)
+                ScrollPattern.MARATHON -> mo.stretch()
+                ScrollPattern.QUICK_RETURN -> mo.doubleTake()
+            }
+        }
     }
 
     /** Mo wakes up with a stretch and a yawn. */

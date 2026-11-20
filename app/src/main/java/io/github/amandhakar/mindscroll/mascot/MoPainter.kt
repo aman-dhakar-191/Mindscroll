@@ -61,10 +61,12 @@ object MoPainter {
         val wave = sin(pose.phase * 2 * PI).toFloat()
         val asleep = pose.sleep > 0.5f
         val yawning = !asleep && pose.yawn > 0.25f
-        val excited = !asleep && !yawning && pose.excite > 0.35f
-        val surprised = !asleep && !yawning && !excited && pose.react > 0.35f
+        val excited = !asleep && !yawning && pose.excite > 0.35f && pose.whirl <= 0.35f
+        val surprised = !asleep && !yawning && !excited && pose.whirl <= 0.35f && pose.react > 0.35f
+        // Spiral eyes: scrolling too fast, or mesmerised by one reel. Takes over the face.
+        val whirling = !asleep && !yawning && pose.whirl > 0.35f
         // Saying goodbye: eyes close in a smile as Mo turns away.
-        val farewell = !asleep && !yawning && !excited && !surprised && pose.exit > 0.35f
+        val farewell = !asleep && !yawning && !excited && !surprised && !whirling && pose.exit > 0.35f
         val amp = pose.idleAmplitude
         // Eyelids still heavy while waking up.
         val blink = maxOf(pose.blink, pose.sleep)
@@ -99,6 +101,10 @@ object MoPainter {
                 Mood.CURIOUS -> canvas.rotate(1.2f * wave * amp, pivotX, pivotY) // attentive little tilt
                 Mood.DIZZY -> canvas.rotate(2.8f * wave * amp, pivotX, pivotY) // gently unsteady
             }
+        }
+        // Dizzy: the whole body wobbles as the eyes spin.
+        if (pose.whirl > 0f) {
+            canvas.rotate(6f * pose.whirl * sin(pose.whirlTurn * 2f * PI.toFloat() * 0.8f), pivotX, pivotY)
         }
         // App switch: the body turns the way Mo's eyes are going.
         if (pose.glance != 0f) {
@@ -182,6 +188,13 @@ object MoPainter {
                 rect.set(x - s * 0.07f * grow, eyeY - s * 0.05f, x + s * 0.07f * grow, eyeY + s * 0.07f * grow)
                 canvas.drawArc(rect, 200f, 140f, false, stroke)
             }
+        } else if (whirling) {
+            eyeX.forEachIndexed { i, x ->
+                canvas.save()
+                canvas.rotate(pose.whirlTurn * 360f * if (i == 0) 1 else -1, x, eyeY)
+                spiral(canvas, x, eyeY, s * 0.085f)
+                canvas.restore()
+            }
         } else if (surprised) {
             for (x in eyeX) wideEye(canvas, x, eyeY, s * (0.09f + 0.012f * pose.react.coerceIn(0f, 1f)), blink)
         } else when (mood) {
@@ -220,6 +233,8 @@ object MoPainter {
             val open = s * (0.04f + 0.08f * pose.yawn)
             rect.set(s * 0.5f - open * 0.7f, mouthY - open * 0.8f, s * 0.5f + open * 0.7f, mouthY + open)
             canvas.drawOval(rect, fill)
+        } else if (whirling) {
+            wave(canvas, s * 0.36f, s * 0.64f, mouthY, s * 0.03f)
         } else if (excited) {
             // An open grin that widens with the joy.
             val open = pose.excite.coerceIn(0f, 1f)
@@ -253,7 +268,7 @@ object MoPainter {
         canvas.restore()
 
         // A "z" floats up and fades, outside the body's sway: running on fumes, or asleep.
-        if (asleep || (mood == Mood.SLEEPY && !surprised && !excited && !farewell && !yawning)) {
+        if (asleep || (mood == Mood.SLEEPY && !surprised && !excited && !farewell && !yawning && !whirling)) {
             canvas.save()
             canvas.translate(left, top - s * 0.08f * pose.phase)
             stroke.color = body
@@ -417,6 +432,8 @@ class MoView @JvmOverloads constructor(
     private var reactProfile: MotionProfile = MotionProfile.BALANCED
     private var reactLengthMs = 0L
     private var yawnStart: Long? = null
+    private var whirlStart: Long? = null
+    private var whirlSlow = false
     private val idle = MoIdle()
     private var lastIdleBehavior: IdleBehavior? = null
     private var reactExcited = false
@@ -442,7 +459,8 @@ class MoView @JvmOverloads constructor(
             val busy = asleep || reducedMotion || !isShown ||
                 running(reactStart, reactLengthMs, now) || running(peekStart, effectiveProfile.peekMs, now) ||
                 running(glanceStart, effectiveProfile.glanceMs, now) || running(exitStart, effectiveProfile.exitMs, now) ||
-                running(wakeStart, MoMotion.WAKE_MS, now) || running(yawnStart, MoMotion.WAKE_MS, now)
+                running(wakeStart, MoMotion.WAKE_MS, now) || running(yawnStart, MoMotion.WAKE_MS, now) ||
+                running(whirlStart, MoMotion.whirlDurationMs(whirlSlow), now)
             if (!busy && idleMotion) {
                 val behavior = idle.pick(mood, java.time.LocalTime.now().hour, lastIdleBehavior)
                 lastIdleBehavior = behavior
@@ -457,6 +475,10 @@ class MoView @JvmOverloads constructor(
             }
             if (idleMotion) scheduleIdle()
         }
+    }
+
+    private companion object {
+        const val DOUBLE_TAKE_GAP_MS = 380L
     }
 
     private fun scheduleIdle() {
@@ -478,7 +500,7 @@ class MoView @JvmOverloads constructor(
     private fun pose(now: Long, idle: Boolean = idleMotion && !reducedMotion): MoPose = MoMotion.pose(
         now, blinkStart, reactStart, idle, asleep, wakeStart, mood, moodChangedAt, peekStart, reactionIntensity,
         exitStart, effectiveProfile, reactFrom, reactExcited, glanceStart, peekCarry, exitCarry, glanceCarry,
-        reactProfile, yawnStart,
+        reactProfile, yawnStart, whirlStart, whirlSlow,
     )
 
     /**
@@ -528,6 +550,31 @@ class MoView @JvmOverloads constructor(
         invalidate()
     }
 
+    /**
+     * Spiral eyes and a wobble: Mo is dizzy from scrolling too fast ([slow] false), or mesmerised
+     * by one reel that won't end ([slow] true). Ignored while a whirl is already going.
+     */
+    fun whirl(slow: Boolean = false) {
+        val now = SystemClock.uptimeMillis()
+        if (asleep || running(whirlStart, MoMotion.whirlDurationMs(whirlSlow), now)) return
+        whirlSlow = slow
+        whirlStart = now
+        invalidate()
+    }
+
+    /** A big stretch and yawn without falling asleep: a long stretch of scrolling, or boredom. */
+    fun stretch() {
+        if (asleep) return
+        yawnStart = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    /** "Wait, again?": a quick sideways look, then a lean in. */
+    fun doubleTake() {
+        glance()
+        postDelayed({ if (!asleep) peek() }, DOUBLE_TAKE_GAP_MS)
+    }
+
     /** Wakes Mo up, if asleep: eyes open slowly through a big yawn and a stretch. */
     fun wakeUp() {
         if (!asleep) return
@@ -566,6 +613,7 @@ class MoView @JvmOverloads constructor(
         val animating = running(blinkStart, MoMotion.blinkDurationMs(mood)) ||
             running(reactStart, reactLengthMs) ||
             running(yawnStart, MoMotion.WAKE_MS) ||
+            running(whirlStart, MoMotion.whirlDurationMs(whirlSlow)) ||
             running(wakeStart, MoMotion.WAKE_MS) ||
             running(moodChangedAt, MoMotion.MOOD_TRANSITION_MS) ||
             running(peekStart, p.peekMs) ||

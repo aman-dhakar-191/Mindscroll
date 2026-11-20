@@ -212,6 +212,30 @@ object Mo {
         Mood.DIZZY to listOf("Okay, now I'm dizzy.", "The camera hole is spinning."),
         Mood.SLEEPY to listOf("I'm running on fumes.", "*slumps* we've done a lot."),
     )
+    internal val lingering = listOf(
+        "Still on this one? It must be a good one.",
+        "This reel has been going a while. I'm not judging. A little.",
+        "Is it stuck, or are we?",
+        "Hmm? Something on this one I missed?",
+    )
+    internal val staring = listOf(
+        "Hello? Blink once if you can hear me.",
+        "We've been staring a while. I'm a little hypnotized.",
+        "*waves a tiny hand in front of the glass*",
+        "I think the reel is winning.",
+    )
+    internal val marathon = listOf(
+        "{x} minutes in one go. Neck stretch?",
+        "We've been in here {x} minutes. I'm stretching. You could too.",
+        "*stretches* {x} minutes. Something far away, for a second?",
+        "{x} minutes without a pause. Water? I'll hold your place.",
+    )
+    internal val quickReturn = listOf(
+        "Back already? You just left.",
+        "That was quick. I hadn't even sat down.",
+        "Checking again? I'll keep the seat warm.",
+        "Oh, hello again. That was about a blink.",
+    )
     internal val welcomeBack = listOf(
         "Welcome back. I napped. It was great.",
         "Oh, hi. I was dreaming of grass. Real grass.",
