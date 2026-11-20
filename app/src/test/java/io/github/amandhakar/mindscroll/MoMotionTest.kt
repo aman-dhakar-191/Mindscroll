@@ -109,10 +109,18 @@ class MoMotionTest {
     }
 
     @Test
-    fun inactiveSessionHasNoReaction() {
+    fun closingTrackedAppTriggersExitReaction() {
+        assertEquals(
+            SessionReaction.APP_EXIT,
+            MoMotion.sessionReaction("com.example.a", null, 1_000L, 2_000L, true),
+        )
+    }
+
+    @Test
+    fun noSessionAtStartupDoesNotTriggerExitReaction() {
         assertEquals(
             SessionReaction.NONE,
-            MoMotion.sessionReaction("com.example.a", null, 1_000L, 2_000L, true),
+            MoMotion.sessionReaction(null, null, null, 2_000L, false),
         )
     }
 
