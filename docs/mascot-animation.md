@@ -33,9 +33,27 @@ How Mo moves, and how to check it on a device.
 | Back after a break | wakes with a stretch and yawn, or hops joyfully if awake | joy |
 | App exit | eases into a lean and turns away | eyes close in a smile |
 | Three quick taps | squash, then a giggle | joy |
+| Nothing happening | a small random behaviour every few seconds | varies |
 
 An event that arrives mid-animation continues from the current pose: a reaction restarts from
 where Mo is (and skips the crouch), and gestures blend out of the pose they interrupted.
+
+## Local intelligence: temperament and idle behaviour
+
+Plain rules and statistics, no model, nothing leaves the phone.
+
+- **Fatigue changes the body, not just the face** (`MoTemperament`). A worn-out Mo (Dizzy, Sleepy)
+  reacts smaller and slower than a rested one.
+- **Habituation.** The first reel after a minute without one is a full startle. Each reel in a
+  steady run startles a bit less, settling after about 9 reels at under half the size, and a
+  little brisker. A minute without a reel and the surprise comes back.
+- **Idle director** (`MoIdle`). Every 6-24 s (by mood and style) Mo does one small thing: look
+  around, a curious peek, a stretch and yawn, or a little wiggle. Picked at random, weighted by mood
+  (Sleepy yawns, Curious looks around) and the time of day (more yawns late at night), and not the
+  same thing twice in a row. Never over an event animation, and only while the idle sway is on, so
+  Calm and a switched-off screen stay still. It runs on a timer, not per frame.
+- Both write to the detection log (`mo: idle → …`, and `run`, `novelty`, `energy`, `size`, `tempo`
+  on each reel line), so what Mo did and why can be read back.
 
 ## Battery
 

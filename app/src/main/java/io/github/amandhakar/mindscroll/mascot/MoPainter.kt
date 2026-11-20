@@ -386,6 +386,8 @@ class MoView @JvmOverloads constructor(
     var idleMotion: Boolean = false
         set(value) {
             field = value
+            // The director runs on a timer only while there is idle motion to direct.
+            if (value) scheduleIdle() else removeCallbacks(idleDirector)
             invalidate()
         }
 
@@ -411,6 +413,12 @@ class MoView @JvmOverloads constructor(
     private var blinkStart: Long? = null
     private var reactStart: Long? = null
     private var reactFrom: Float = 0f
+    /** Timing of the reaction in progress (tired Mo: slower; Mo used to the scrolling: brisker). */
+    private var reactProfile: MotionProfile = MotionProfile.BALANCED
+    private var reactLengthMs = 0L
+    private var yawnStart: Long? = null
+    private val idle = MoIdle()
+    private var lastIdleBehavior: IdleBehavior? = null
     private var reactExcited = false
     private var wakeStart: Long? = null
     private var moodChangedAt: Long? = null
@@ -427,6 +435,38 @@ class MoView @JvmOverloads constructor(
 
     private val effectiveProfile: MotionProfile get() = if (reducedMotion) MotionProfile.CALM else profile
 
+    /** Every so often Mo does a small unprompted thing; see [MoIdle]. Never over an event animation. */
+    private val idleDirector = object : Runnable {
+        override fun run() {
+            val now = SystemClock.uptimeMillis()
+            val busy = asleep || reducedMotion || !isShown ||
+                running(reactStart, reactLengthMs, now) || running(peekStart, effectiveProfile.peekMs, now) ||
+                running(glanceStart, effectiveProfile.glanceMs, now) || running(exitStart, effectiveProfile.exitMs, now) ||
+                running(wakeStart, MoMotion.WAKE_MS, now) || running(yawnStart, MoMotion.WAKE_MS, now)
+            if (!busy && idleMotion) {
+                val behavior = idle.pick(mood, java.time.LocalTime.now().hour, lastIdleBehavior)
+                lastIdleBehavior = behavior
+                DetectionLog.add("mo: idle → ${behavior.label} (${mood.name.lowercase()})")
+                when (behavior) {
+                    IdleBehavior.LOOK_AROUND -> glance()
+                    IdleBehavior.PEEK -> peek()
+                    IdleBehavior.YAWN -> yawnStart = now.also { invalidate() }
+                    // Small enough to stay a wiggle: a nod of a reaction, not a startle.
+                    IdleBehavior.WIGGLE -> react(intensity = 0.3f, tempo = 0.9f)
+                }
+            }
+            if (idleMotion) scheduleIdle()
+        }
+    }
+
+    private fun scheduleIdle() {
+        removeCallbacks(idleDirector)
+        if (isAttachedToWindow) postDelayed(idleDirector, idle.nextDelayMs(mood, effectiveProfile))
+    }
+
+    private fun running(start: Long?, lengthMs: Long, now: Long = SystemClock.uptimeMillis()) =
+        start?.let { now - it < lengthMs } ?: false
+
     private val blinker = object : Runnable {
         override fun run() {
             blinkStart = SystemClock.uptimeMillis()
@@ -438,21 +478,25 @@ class MoView @JvmOverloads constructor(
     private fun pose(now: Long, idle: Boolean = idleMotion && !reducedMotion): MoPose = MoMotion.pose(
         now, blinkStart, reactStart, idle, asleep, wakeStart, mood, moodChangedAt, peekStart, reactionIntensity,
         exitStart, effectiveProfile, reactFrom, reactExcited, glanceStart, peekCarry, exitCarry, glanceCarry,
+        reactProfile, yawnStart,
     )
 
     /**
      * A new reel counted: Mo is startled (or, if [excited], delighted). If a reaction is
      * already playing, the new one carries on from the current pose with no crouch.
      */
-    fun react(intensity: Float = 1f, excited: Boolean = false) {
+    fun react(intensity: Float = 1f, excited: Boolean = false, tempo: Float = 1f) {
         val now = SystemClock.uptimeMillis()
-        val amount = (intensity * effectiveProfile.reactScale).coerceIn(0.5f, 1.8f)
+        val amount = MoMotion.reactAmount(intensity, effectiveProfile)
         reactFrom = if (reactStart == null) 0f else pose(now).react / amount
+        // Cached, so the per-frame pose does no allocation.
+        reactProfile = effectiveProfile.paced(tempo)
+        reactLengthMs = MoMotion.reactionLength(reactProfile, reactFrom)
         DetectionLog.add(
             "mo: pop from ${"%.2f".format(java.util.Locale.ROOT, reactFrom)} " +
                 "(${if (kotlin.math.abs(reactFrom) > MoMotion.CHAIN_THRESHOLD) "already moving, no crouch" else "at rest, crouch first"}), " +
                 "size ${"%.2f".format(java.util.Locale.ROOT, amount)}, " +
-                "${effectiveProfile.riseMs}ms rise, ${effectiveProfile.settleMs}ms settle",
+                "${reactProfile.riseMs}ms rise, ${reactProfile.settleMs}ms settle",
         )
         reactionIntensity = intensity
         reactExcited = excited
@@ -501,10 +545,12 @@ class MoView @JvmOverloads constructor(
         }.getOrDefault(false)
         if (reducedMotion) DetectionLog.add("mo: system animation scale is 0 → reduced motion (calm profile, no idle sway)")
         postDelayed(blinker, MoMotion.nextBlinkDelayMs(profile = effectiveProfile))
+        if (idleMotion) scheduleIdle()
     }
 
     override fun onDetachedFromWindow() {
         removeCallbacks(blinker)
+        removeCallbacks(idleDirector)
         super.onDetachedFromWindow()
     }
 
@@ -517,9 +563,9 @@ class MoView @JvmOverloads constructor(
             stage = MoPainter.ANIMATED_STAGE,
         )
 
-        fun running(start: Long?, lengthMs: Long) = start?.let { now - it < lengthMs } ?: false
         val animating = running(blinkStart, MoMotion.blinkDurationMs(mood)) ||
-            running(reactStart, MoMotion.reactionLength(p, reactFrom)) ||
+            running(reactStart, reactLengthMs) ||
+            running(yawnStart, MoMotion.WAKE_MS) ||
             running(wakeStart, MoMotion.WAKE_MS) ||
             running(moodChangedAt, MoMotion.MOOD_TRANSITION_MS) ||
             running(peekStart, p.peekMs) ||
