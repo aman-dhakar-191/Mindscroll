@@ -2,6 +2,7 @@ package io.github.amandhakar.mindscroll.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -15,7 +16,17 @@ class Settings(context: Context) {
 
     enum class InfoMode { TIMER, COUNTER, BOTH, HIDDEN }
     enum class MascotSize { COMPACT, STANDARD, LARGE }
-    enum class MotionStyle { CALM, BALANCED, PLAYFUL }
+    enum class MotionStyle {
+        CALM, BALANCED, PLAYFUL;
+
+        /** The timing and physics this style gives Mo's animations. */
+        val profile: MotionProfile
+            get() = when (this) {
+                CALM -> MotionProfile.CALM
+                BALANCED -> MotionProfile.BALANCED
+                PLAYFUL -> MotionProfile.PLAYFUL
+            }
+    }
 
     data class Display(
         val cameraPatch: Boolean,

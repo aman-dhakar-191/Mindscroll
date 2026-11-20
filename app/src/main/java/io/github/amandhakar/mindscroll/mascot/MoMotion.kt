@@ -1,6 +1,10 @@
 package io.github.amandhakar.mindscroll.mascot
 
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /** One frame of Mo's expression. All values are 0..1. */
@@ -9,7 +13,11 @@ data class MoPose(
     val phase: Float = 0f,
     /** 0 = eyes open, 1 = eyes shut. */
     val blink: Float = 0f,
-    /** Surprise when a new reel counts: squash, wide eyes, "o" mouth. */
+    /**
+     * The startle envelope when a new reel counts. 0 = rest, 1 = full pop (stretch up, wide
+     * eyes, "o" mouth). It is a spring, so it overshoots below 0 on the way back: that
+     * rebound is the squash that settles the body. Roughly -0.4..1.8.
+     */
     val react: Float = 0f,
     /** 1 = fast asleep (eyes shut, a "z" floating), 0 = awake. */
     val sleep: Float = 0f,
@@ -23,7 +31,75 @@ data class MoPose(
     val peek: Float = 0f,
     val reactionIntensity: Float = 1f,
     val exit: Float = 0f,
+    /** Eyes dart one way and back (app switch). -1..1, signed by direction. */
+    val glance: Float = 0f,
+    /** Joy: the reaction in its happy form (^ ^ eyes, open grin) instead of surprise. 0..1+. */
+    val excite: Float = 0f,
+    /** Brows, shared by every expression. -1 lowered/worried .. 1 raised. */
+    val brow: Float = 0f,
+    /** 0..1: how much higher one brow sits than the other (curiosity). */
+    val browSkew: Float = 0f,
+    /** Mouth corners, shared by every expression. -1 frown .. 1 broad smile. */
+    val smile: Float = 0f,
+    /** Scales the idle sway and breathing for the motion style. */
+    val idleAmplitude: Float = 1f,
+    /** Scales the hop of a reaction for the motion style. */
+    val hop: Float = 1f,
 )
+
+/**
+ * How lively Mo is. One profile per motion style, so the styles differ in *timing and physics*
+ * (how fast Mo reacts, how much he overshoots, how long he takes to settle) and not just in
+ * how big the reaction is.
+ */
+data class MotionProfile(
+    /** Multiplies the size of every reaction. */
+    val reactScale: Float,
+    /** The crouch before a pop. */
+    val anticipationMs: Long,
+    /** How fast the pop rises. */
+    val riseMs: Long,
+    /** How long the spring takes to come to rest after the pop. */
+    val settleMs: Long,
+    /** Spring damping ratio: 1 = no overshoot at all, lower = bouncier. */
+    val damping: Float,
+    /** How far a reaction lifts Mo off the floor. */
+    val hop: Float,
+    val idleAmplitude: Float,
+    /** Redraw interval of the idle loop. Slow sway needs no more than this. */
+    val idleFrameMs: Long,
+    /** Speed of gestures (peek, glance, exit); above 1 = snappier. */
+    val gestureSpeed: Float,
+    /** Scales the gap between blinks; below 1 = blinks more often. */
+    val blinkGapScale: Float,
+) {
+    /** Real time a gesture takes at this style's speed. */
+    val peekMs: Long get() = (MoMotion.PEEK_MS / gestureSpeed).toLong()
+    val glanceMs: Long get() = (MoMotion.GLANCE_MS / gestureSpeed).toLong()
+    val exitMs: Long get() = (MoMotion.EXIT_MS / gestureSpeed).toLong()
+
+    /** From the start of the pop to the spring being at rest. */
+    val reactMs: Long get() = riseMs + settleMs
+    /** Everything a reaction can draw, crouch included. */
+    val reactTotalMs: Long get() = anticipationMs + reactMs
+
+    companion object {
+        /** Soft and unhurried: small, critically damped reactions with no bounce. */
+        val CALM = MotionProfile(
+            reactScale = 0.8f, anticipationMs = 50, riseMs = 200, settleMs = 520, damping = 1f,
+            hop = 0.4f, idleAmplitude = 0.6f, idleFrameMs = 66, gestureSpeed = 0.8f, blinkGapScale = 1.3f,
+        )
+        val BALANCED = MotionProfile(
+            reactScale = 1.1f, anticipationMs = 90, riseMs = 120, settleMs = 630, damping = 0.55f,
+            hop = 1f, idleAmplitude = 1f, idleFrameMs = 50, gestureSpeed = 1f, blinkGapScale = 1f,
+        )
+        /** Snappy and springy: a longer crouch, a fast pop, a couple of rebounds. */
+        val PLAYFUL = MotionProfile(
+            reactScale = 1.45f, anticipationMs = 140, riseMs = 80, settleMs = 900, damping = 0.28f,
+            hop = 1.7f, idleAmplitude = 1.35f, idleFrameMs = 40, gestureSpeed = 1.3f, blinkGapScale = 0.7f,
+        )
+    }
+}
 
 /** The visual meaning of a tracked-app session transition. */
 enum class SessionReaction {
@@ -48,6 +124,14 @@ object MoMotion {
     const val MOOD_TRANSITION_MS = 420L
     const val PEEK_MS = 680L
     const val EXIT_MS = 720L
+    const val GLANCE_MS = 700L
+    private const val EXIT_LEAN_IN = 0.3f
+    /** A gesture that interrupts another one blends out the old pose over this long. */
+    const val CARRY_FADE_MS = 160L
+    /** A new reaction landing while Mo is already moving this much skips the crouch. */
+    const val CHAIN_THRESHOLD = 0.25f
+    /** Sleepy blinks are slow and heavy. */
+    private const val SLEEPY_BLINK_MS = 320L
     const val RETURN_BREAK_THRESHOLD_MS = 5 * 60_000L
 
     /**
@@ -77,24 +161,76 @@ object MoMotion {
     fun phase(timeMs: Long): Float = (timeMs.mod(LOOP_MS)).toFloat() / LOOP_MS
 
     /** Eyelids close and reopen over [BLINK_MS]. */
-    fun blink(sinceBlinkMs: Long): Float {
-        if (sinceBlinkMs < 0 || sinceBlinkMs >= BLINK_MS) return 0f
-        val t = sinceBlinkMs.toFloat() / BLINK_MS
+    fun blink(sinceBlinkMs: Long, durationMs: Long = BLINK_MS): Float {
+        if (sinceBlinkMs < 0 || sinceBlinkMs >= durationMs) return 0f
+        val t = sinceBlinkMs.toFloat() / durationMs
         val halfCycle = if (t < 0.5f) t * 2f else (1f - t) * 2f
         return smoothStep(halfCycle)
     }
 
-    /** A quick rise, then an eased settle over the rest of [REACT_MS]. */
-    fun react(sinceReactMs: Long): Float {
-        if (sinceReactMs < 0 || sinceReactMs >= REACT_MS) return 0f
-        if (sinceReactMs < REACT_RISE_MS) {
-            val t = sinceReactMs.toFloat() / REACT_RISE_MS
-            return 1f - (1f - t) * (1f - t) * (1f - t)
+    fun blinkDurationMs(mood: Mood): Long = if (mood == Mood.SLEEPY) SLEEPY_BLINK_MS else BLINK_MS
+
+    /**
+     * The startle: a fast ease-out rise (from [from], so a reaction that lands mid-motion
+     * carries on from where Mo is instead of snapping to rest first), then a damped spring
+     * that overshoots below zero and settles. The overshoot is what turns the pop into a
+     * squash-and-stretch instead of a fade.
+     */
+    fun react(sinceReactMs: Long, profile: MotionProfile = MotionProfile.BALANCED, from: Float = 0f): Float {
+        if (sinceReactMs < 0 || sinceReactMs >= profile.reactMs) return 0f
+        if (sinceReactMs < profile.riseMs) {
+            val t = sinceReactMs.toFloat() / profile.riseMs
+            val easedOut = 1f - (1f - t) * (1f - t) * (1f - t)
+            return from + (1f - from) * easedOut
         }
-        val t = (sinceReactMs - REACT_RISE_MS).toFloat() / (REACT_MS - REACT_RISE_MS)
-        val eased = t * t * (3 - 2 * t)
-        return 1f - eased
+        return springDecay(sinceReactMs - profile.riseMs, profile.settleMs, profile.damping)
     }
+
+    /**
+     * A spring released from 1 with no velocity, relaxing to 0 over [durationMs] (envelope down
+     * to ~2%). [damping] is the damping ratio; 1 or more is critically damped (no overshoot).
+     * Closed form, so it can be sampled at any time with no state or per-frame integration.
+     */
+    fun springDecay(tMs: Long, durationMs: Long, damping: Float): Float {
+        if (tMs < 0 || tMs >= durationMs) return 0f
+        val t = tMs / 1000f
+        val d = durationMs / 1000f
+        val z = damping.coerceIn(0.05f, 1f)
+        val value = if (z >= 1f) {
+            val w = 7f / d
+            exp(-w * t) * (1f + w * t)
+        } else {
+            val w = 4f / (z * d)
+            val wd = w * sqrt(1f - z * z)
+            exp(-z * w * t) * (kotlin.math.cos(wd * t) + z / sqrt(1f - z * z) * sin(wd * t))
+        }
+        // Make sure it lands exactly on rest.
+        val tail = (t / d - 0.9f) / 0.1f
+        return if (tail > 0f) value * (1f - smoothStep(tail)) else value
+    }
+
+    /**
+     * The crouch: eases in over [MotionProfile.anticipationMs], then releases over the pop's
+     * rise so the crouch and the stretch blend instead of the body snapping from crouched to
+     * neutral at the instant the pop starts.
+     */
+    fun anticipation(sinceReactMs: Long, profile: MotionProfile, from: Float = 0f): Float {
+        val len = anticipationLength(profile, from)
+        return when {
+            len <= 0 || sinceReactMs < 0 -> 0f
+            sinceReactMs < len -> smoothStep(sinceReactMs.toFloat() / len)
+            sinceReactMs < len + profile.riseMs -> 1f - smoothStep((sinceReactMs - len).toFloat() / profile.riseMs)
+            else -> 0f
+        }
+    }
+
+    /** No crouch when already in motion: a wind-up mid-bounce reads as a glitch. */
+    fun anticipationLength(profile: MotionProfile, from: Float): Long =
+        if (abs(from) > CHAIN_THRESHOLD) 0L else profile.anticipationMs
+
+    /** A whole reaction, crouch included, is over this long after it starts. */
+    fun reactionLength(profile: MotionProfile, from: Float = 0f): Long =
+        anticipationLength(profile, from) + profile.reactMs
 
     private fun smoothStep(t: Float): Float = t * t * (3f - 2f * t)
 
@@ -123,16 +259,66 @@ object MoMotion {
         }
     }
 
-    /** A small lean and turn as Mo notices the tracked app closing. */
+    /**
+     * A small lean and turn as Mo notices the tracked app closing: eases into the lean over the
+     * first third (it used to start at full lean, which snapped), then eases back out.
+     */
     fun exit(sinceExitMs: Long): Float {
         if (sinceExitMs < 0 || sinceExitMs >= EXIT_MS) return 0f
         val t = sinceExitMs.toFloat() / EXIT_MS
-        return smoothStep(1f - t)
+        return if (t < EXIT_LEAN_IN) smoothStep(t / EXIT_LEAN_IN) else smoothStep(1f - (t - EXIT_LEAN_IN) / (1f - EXIT_LEAN_IN))
+    }
+
+    /**
+     * Eyes dart to one side and swing back past centre before settling: "what was that?" on an
+     * app switch. Signed, so the body and eyes can lean the way Mo is looking.
+     */
+    fun glance(sinceMs: Long): Float {
+        if (sinceMs < 0 || sinceMs >= GLANCE_MS) return 0f
+        val t = sinceMs.toFloat() / GLANCE_MS
+        return sin(t * 2f * PI.toFloat()) * (1f - smoothStep(t))
+    }
+
+    /**
+     * Blends the pose a gesture was interrupted in back to the new gesture over
+     * [CARRY_FADE_MS], so restarting a gesture mid-flight never snaps.
+     */
+    fun carried(value: Float, carry: Float, sinceMs: Long): Float {
+        if (carry == 0f || sinceMs < 0 || sinceMs >= CARRY_FADE_MS) return value
+        return value + carry * (1f - smoothStep(sinceMs.toFloat() / CARRY_FADE_MS))
     }
 
     /** Irregular gaps between blinks look alive; a fixed rhythm looks mechanical. */
-    fun nextBlinkDelayMs(random: Random = Random): Long = 2200L + random.nextLong(3200L)
+    fun nextBlinkDelayMs(random: Random = Random, profile: MotionProfile = MotionProfile.BALANCED): Long =
+        ((2200L + random.nextLong(3200L)) * profile.blinkGapScale).toLong()
 
+    /** Resting brow height of a mood. Negative = lowered (worried, drooping). */
+    fun baseBrow(mood: Mood): Float = when (mood) {
+        Mood.CHILL -> 0.1f
+        Mood.CURIOUS -> 0.35f
+        Mood.WOBBLY -> -0.55f
+        Mood.DIZZY -> -0.25f
+        Mood.SLEEPY -> -0.35f
+    }
+
+    /** Resting mouth corners of a mood. */
+    fun baseSmile(mood: Mood): Float = when (mood) {
+        Mood.CHILL -> 0.65f
+        Mood.CURIOUS -> 0.25f
+        Mood.WOBBLY -> -0.25f
+        Mood.DIZZY -> -0.1f
+        Mood.SLEEPY -> 0.05f
+    }
+
+    /**
+     * Mo's whole pose at [timeMs]. Every channel is a function of the same clock and the same
+     * start times, so the face (brows, eyes, mouth) and the body (squash, hop, lean) are always
+     * sampled together and cannot drift apart.
+     *
+     * Interruptions: [reactFrom] is the reaction value at the moment a new reaction replaced the
+     * previous one, and the `*Carry` values are the same for the gestures. Callers capture them
+     * with the same functions used here, so a restart continues smoothly from the current pose.
+     */
     fun pose(
         timeMs: Long,
         blinkStartMs: Long?,
@@ -145,39 +331,90 @@ object MoMotion {
         peekStartMs: Long? = null,
         reactionIntensity: Float = 1f,
         exitStartMs: Long? = null,
+        profile: MotionProfile = MotionProfile.BALANCED,
+        reactFrom: Float = 0f,
+        reactExcited: Boolean = false,
+        glanceStartMs: Long? = null,
+        peekCarry: Float = 0f,
+        exitCarry: Float = 0f,
+        glanceCarry: Float = 0f,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
         val sinceReact = reactStartMs?.let { timeMs - it }
         val loop = if (idle || asleep) phase(timeMs) else 0f
-        val glance = when (mood) {
+        val speed = profile.gestureSpeed
+        val glanceRange = when (mood) {
             Mood.CHILL -> 0.008f
             Mood.CURIOUS -> 0.045f
             Mood.WOBBLY -> 0.025f
             Mood.DIZZY -> 0.06f
             Mood.SLEEPY -> 0.012f
-        }
-        val anticipation = sinceReact?.let {
-            if (it in 0 until ANTICIPATION_MS) smoothStep(it.toFloat() / ANTICIPATION_MS) else 0f
+        } * profile.idleAmplitude
+
+        val amount = (reactionIntensity * profile.reactScale).coerceIn(0.5f, 1.8f)
+        val crouchMs = anticipationLength(profile, reactFrom)
+        val anticipation = sinceReact?.let { anticipation(it, profile, reactFrom) } ?: 0f
+        val react = (sinceReact?.let { react(it - crouchMs, profile, reactFrom) } ?: 0f) * amount
+
+        val peek = peekStartMs?.let {
+            val since = timeMs - it
+            carried(peek((since * speed).toLong()), peekCarry, since)
         } ?: 0f
+        val exit = exitStartMs?.let {
+            val since = timeMs - it
+            carried(exit((since * speed).toLong()), exitCarry, since)
+        } ?: 0f
+        val glance = glanceStartMs?.let {
+            val since = timeMs - it
+            carried(glance((since * speed).toLong()), glanceCarry, since)
+        } ?: 0f
+
+        val sleep = when {
+            asleep -> 1f
+            sinceWake != null -> wakingSleep(sinceWake)
+            else -> 0f
+        }
+        val yawn = sinceWake?.let { yawn(it) } ?: 0f
+        val startle = react.coerceAtLeast(0f)
+        val excite = if (reactExcited) startle else 0f
+        val surprise = startle - excite
+
+        // Expression: one model feeds the face for every mood and every event, so a startle, a
+        // hello and a farewell all read as the same character.
+        val brow = (
+            baseBrow(mood) +
+                surprise * 0.9f + excite * 0.5f +
+                peek * 0.5f + abs(glance) * 0.3f +
+                exit * 0.2f
+            ) * (1f - sleep * 0.6f)
+        val smile = (
+            baseSmile(mood) +
+                excite * 0.9f - surprise * 0.5f +
+                peek * 0.35f + exit * 0.5f
+            ) * (1f - sleep * 0.5f)
+
         return MoPose(
             phase = loop,
-            blink = if (asleep) 0f else blinkStartMs?.let { blink(timeMs - it) } ?: 0f,
-            react = (sinceReact?.let { react(it - ANTICIPATION_MS) } ?: 0f) * reactionIntensity.coerceIn(0.8f, 1.5f),
-            sleep = when {
-                asleep -> 1f
-                sinceWake != null -> wakingSleep(sinceWake)
-                else -> 0f
-            },
-            yawn = sinceWake?.let { yawn(it) } ?: 0f,
+            blink = if (asleep) 0f else blinkStartMs?.let { blink(timeMs - it, blinkDurationMs(mood)) } ?: 0f,
+            react = react,
+            sleep = sleep,
+            yawn = yawn,
             anticipation = anticipation,
-            gazeX = if (idle && !asleep) kotlin.math.sin(loop * 2 * Math.PI).toFloat() * glance else 0f,
-            gazeY = if (idle && !asleep) kotlin.math.cos(loop * 4 * Math.PI).toFloat() * glance * 0.35f else 0f,
+            gazeX = if (idle && !asleep) sin(loop * 2 * PI).toFloat() * glanceRange + glance * 0.07f else glance * 0.07f,
+            gazeY = if (idle && !asleep) kotlin.math.cos(loop * 4 * PI).toFloat() * glanceRange * 0.35f else 0f,
             moodTransition = moodChangedAtMs?.let {
                 smoothStep(((timeMs - it).toFloat() / MOOD_TRANSITION_MS).coerceIn(0f, 1f))
             } ?: 1f,
-            peek = peekStartMs?.let { peek(timeMs - it) } ?: 0f,
+            peek = peek,
             reactionIntensity = reactionIntensity,
-            exit = exitStartMs?.let { exit(timeMs - it) } ?: 0f,
+            exit = exit,
+            glance = glance,
+            excite = excite,
+            brow = brow.coerceIn(-1f, 1f),
+            browSkew = (abs(glance) * 0.8f + peek * 0.3f).coerceIn(0f, 1f),
+            smile = smile.coerceIn(-1f, 1f),
+            idleAmplitude = profile.idleAmplitude,
+            hop = profile.hop,
         )
     }
 }
