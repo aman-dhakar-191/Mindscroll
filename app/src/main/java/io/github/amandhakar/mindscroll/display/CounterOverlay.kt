@@ -81,6 +81,8 @@ class CounterOverlay(
     private var lastSessionPackage: String? = null
     private var lastSessionEndedAtMs: Long? = null
     private var hasSeenSession = false
+    private var exitPending = false
+    private val finishExit = Runnable { exitPending = false; refresh() }
     private var inCall = false
     /** Long-pressing the patch hides it until this time (uptime ms). */
     private var snoozedUntil = 0L
@@ -155,7 +157,7 @@ class CounterOverlay(
             isPortrait() &&
             !inCall &&
             SystemClock.uptimeMillis() >= snoozedUntil &&
-            session != null
+            (session != null || exitPending)
 
     /** Re-applies what's on screen after something that affects it changed. */
     private fun refresh() {
@@ -375,7 +377,16 @@ class CounterOverlay(
         session = newSession
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
+            if (reaction == SessionReaction.APP_EXIT) {
+                exitPending = true
+                patch?.mo?.exitSession()
+                bubble?.mo?.exitSession()
+                handler.removeCallbacks(finishExit)
+                handler.postDelayed(finishExit, MoMotion.EXIT_MS)
+            }
         } else {
+            handler.removeCallbacks(finishExit)
+            exitPending = false
             lastSessionPackage = newSession.packageName
             lastSessionEndedAtMs = null
             hasSeenSession = true
@@ -393,7 +404,7 @@ class CounterOverlay(
                     patch?.mo?.wakeUp()
                     bubble?.mo?.wakeUp()
                 }
-                SessionReaction.NONE -> Unit
+                SessionReaction.APP_EXIT, SessionReaction.NONE -> Unit
             }
         }
 
@@ -401,8 +412,8 @@ class CounterOverlay(
             bindSession(it)
             layoutPatch(it, apply = true)
         }
-        // Entering or leaving a tracked app can show or hide the patch.
-        refresh()
+        // Keep the camera island alive for Mo's farewell, then remove it after the animation.
+        if (newSession != null || !exitPending) refresh()
     }
 
     private fun bindSession(views: PatchViews) {
@@ -702,7 +713,12 @@ class CounterOverlay(
 
     /** When the count goes up: the number pops, and Mo hops and looks surprised. */
     private fun bump(count: View, mo: MoView) {
-        mo.react()
+        val intensity = when (display.motionStyle) {
+            Settings.MotionStyle.CALM -> 1.0f
+            Settings.MotionStyle.BALANCED -> 1.18f
+            Settings.MotionStyle.PLAYFUL -> 1.42f
+        }
+        mo.react(intensity)
         count.animate().cancel()
         count.scaleX = 1.35f
         count.scaleY = 1.35f
