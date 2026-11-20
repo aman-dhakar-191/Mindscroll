@@ -10,6 +10,7 @@ import io.github.amandhakar.mindscroll.data.MoMemoryStore
 import io.github.amandhakar.mindscroll.data.MoPrefs
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.display.CounterNotification
+import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,13 @@ class MindscrollApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Keep the last crash on the phone, shown in the detection log, whatever else fails.
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching { crashFile().writeText("${java.util.Date()}\n${error.stackTraceToString()}") }
+            previous?.uncaughtException(thread, error)
+        }
+        crashFile().takeIf { it.exists() }?.let { DetectionLog.add("LAST CRASH: ${it.readText()}") }
         val diagnosticsEnabled = settings.diagnosticsEnabled
         FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(diagnosticsEnabled)
         FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(diagnosticsEnabled)
@@ -45,6 +53,8 @@ class MindscrollApp : Application() {
             settings.observeReelApps().collect { TrackedApps.setReelPackages(it) }
         }
     }
+
+    fun crashFile() = java.io.File(filesDir, "last_crash.txt")
 
     /** The app's name as the phone shows it, falling back to what Mindscroll knows. */
     @Synchronized
