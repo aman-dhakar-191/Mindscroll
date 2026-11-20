@@ -35,6 +35,7 @@ import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.MoProp
 import io.github.amandhakar.mindscroll.mascot.MoTemperament
 import io.github.amandhakar.mindscroll.mascot.ScrollPattern
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
@@ -236,19 +237,28 @@ class CounterOverlay(
         val views = listOfNotNull(patch?.mo, bubble?.mo)
         DetectionLog.add(
             "mo: ${pattern.label} → " + when (pattern) {
-                ScrollPattern.TOO_FAST -> "dizzy: fast spiral eyes and a wobble"
-                ScrollPattern.LINGERING -> "leans in: hmm?"
+                ScrollPattern.TOO_FAST -> "panic: fast spiral eyes, sweat drops, speed lines"
+                ScrollPattern.LINGERING -> "side-eye and a slow \"...\""
                 ScrollPattern.STARING -> "mesmerised: slow spiral eyes"
-                ScrollPattern.MARATHON -> "stretch and yawn"
-                ScrollPattern.QUICK_RETURN -> "double take"
+                ScrollPattern.MARATHON -> "stretch and yawn, a tuft of grass: touch grass"
+                ScrollPattern.QUICK_RETURN -> "double take and a \"?!\""
             } + " (${views.size} view${if (views.size == 1) "" else "s"})",
         )
         views.forEach { mo ->
             when (pattern) {
-                ScrollPattern.TOO_FAST -> mo.whirl(slow = false)
-                ScrollPattern.LINGERING -> mo.peek()
+                ScrollPattern.TOO_FAST -> {
+                    mo.whirl(slow = false)
+                    mo.props(MoProp.SWEAT, MoProp.SPEED_LINES)
+                }
+                ScrollPattern.LINGERING -> {
+                    mo.sideEye()
+                    mo.props(MoProp.DOTS)
+                }
                 ScrollPattern.STARING -> mo.whirl(slow = true)
-                ScrollPattern.MARATHON -> mo.stretch()
+                ScrollPattern.MARATHON -> {
+                    mo.stretch()
+                    mo.props(MoProp.GRASS)
+                }
                 ScrollPattern.QUICK_RETURN -> mo.doubleTake()
             }
         }
@@ -874,6 +884,8 @@ class CounterOverlay(
             DetectionLog.add("mo: tapped (#$consecutivePokes in a row${if (repeated) ", giggles" else ""}, ${display.motionStyle.name.lowercase()})")
             // Tickled: the third quick tap in a row turns the startle into a giggle.
             mo.react(excited = repeated)
+            // Tickled past a point, Mo is crying with laughter.
+            if (repeated) mo.props(MoProp.TEARS)
             val playful = display.motionStyle == Settings.MotionStyle.PLAYFUL
             val squash = when {
                 repeated && playful -> 0.78f

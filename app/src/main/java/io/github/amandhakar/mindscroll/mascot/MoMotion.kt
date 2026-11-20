@@ -45,6 +45,12 @@ data class MoPose(
     val whirl: Float = 0f,
     /** How many turns the spiral eyes have made since the whirl began (for the eyes and the wobble). */
     val whirlTurn: Float = 0f,
+    /** The side-eye: pupils slid to one side under flat half-lids. 0..1 envelope. */
+    val sideEye: Float = 0f,
+    /** Which [MoProp]s are showing, as a bit mask. */
+    val propMask: Int = 0,
+    /** Milliseconds since the props started, or -1 when none are showing. */
+    val propSinceMs: Long = -1L,
     /** Scales the idle sway and breathing for the motion style. */
     val idleAmplitude: Float = 1f,
     /** Scales the hop of a reaction for the motion style. */
@@ -127,6 +133,30 @@ enum class SessionReaction {
     APP_EXIT,
 }
 
+/**
+ * Comic props that pop up around Mo, the way a reaction meme adds a sweat drop or a question
+ * mark to a face. Several can show at once ([MoPose.propMask]); each has its own length.
+ */
+enum class MoProp(val durationMs: Long) {
+    /** A "?" above Mo. */
+    QUESTION(1_600L),
+    /** A "!" above Mo, with a shake. */
+    EXCLAIM(1_300L),
+    /** "…" appearing one dot at a time. */
+    DOTS(2_000L),
+    /** Sweat drops sliding down Mo's temple. */
+    SWEAT(1_800L),
+    /** Tears streaming: crying with laughter. */
+    TEARS(2_400L),
+    /** A tuft of grass growing at Mo's feet: "touch grass". */
+    GRASS(3_000L),
+    /** Speed lines streaking off the sides. */
+    SPEED_LINES(1_500L),
+    ;
+
+    val bit: Int get() = 1 shl ordinal
+}
+
 /** Timing for Mo's animations, shared by the app (Compose) and the overlays (views). */
 object MoMotion {
     /** Length of one idle loop. */
@@ -143,6 +173,10 @@ object MoMotion {
     const val PEEK_MS = 680L
     const val EXIT_MS = 720L
     const val GLANCE_MS = 700L
+    private const val BACK = 1.70158f
+
+    /** The side-eye holds this long. */
+    const val SIDE_EYE_MS = 2_400L
     /** Spiral eyes for scrolling too fast: quick spin, short. */
     const val WHIRL_FAST_MS = 1_800L
     /** Spiral eyes for staring at one reel: slow and long, mesmerised. */
@@ -308,6 +342,38 @@ object MoMotion {
         return sin(t * 2f * PI.toFloat()) * (1f - smoothStep(t))
     }
 
+    /** The side-eye eases in, holds the look, and eases out. */
+    fun sideEye(sinceMs: Long): Float {
+        if (sinceMs < 0 || sinceMs >= SIDE_EYE_MS) return 0f
+        val t = sinceMs.toFloat() / SIDE_EYE_MS
+        return when {
+            t < 0.18f -> smoothStep(t / 0.18f)
+            t < 0.78f -> 1f
+            else -> 1f - smoothStep((t - 0.78f) / 0.22f)
+        }
+    }
+
+    /** How far through [prop] is [sinceMs] after the props started: 0..1, or -1 if it isn't showing. */
+    fun propProgress(sinceMs: Long, prop: MoProp): Float =
+        if (sinceMs < 0 || sinceMs >= prop.durationMs) -1f else sinceMs.toFloat() / prop.durationMs
+
+    /**
+     * A prop's size over its [progress] (0..1): it pops in with a little overshoot, holds, then
+     * shrinks away over the last fifth.
+     */
+    fun propPop(progress: Float): Float {
+        if (progress < 0f) return 0f
+        return when {
+            progress < 0.16f -> {
+                // "Ease out back": 0 to 1 with about 10% overshoot. A pop, not a fade-in.
+                val u = progress / 0.16f - 1f
+                1f + (BACK + 1f) * u * u * u + BACK * u * u
+            }
+            progress < 0.8f -> 1f
+            else -> 1f - smoothStep((progress - 0.8f) / 0.2f)
+        }
+    }
+
     fun whirlDurationMs(slow: Boolean): Long = if (slow) WHIRL_SLOW_MS else WHIRL_FAST_MS
 
     /** Spiral eyes: they come in quickly, hold, then ease out over the last third. */
@@ -391,6 +457,9 @@ object MoMotion {
         yawnStartMs: Long? = null,
         whirlStartMs: Long? = null,
         whirlSlow: Boolean = false,
+        sideEyeStartMs: Long? = null,
+        propStartMs: Long? = null,
+        propMask: Int = 0,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
         val sinceReact = reactStartMs?.let { timeMs - it }
@@ -430,6 +499,9 @@ object MoMotion {
         val yawn = maxOf(sinceWake?.let { yawn(it) } ?: 0f, yawnStartMs?.let { yawn(timeMs - it) } ?: 0f)
         val whirlSince = whirlStartMs?.let { timeMs - it }
         val whirl = whirlSince?.let { whirl(it, whirlSlow) } ?: 0f
+        val sideEye = sideEyeStartMs?.let { sideEye(timeMs - it) } ?: 0f
+        val propSince = propStartMs?.let { timeMs - it } ?: -1L
+        val propsOn = propMask != 0 && MoProp.entries.any { propMask and it.bit != 0 && propProgress(propSince, it) >= 0f }
         val startle = react.coerceAtLeast(0f)
         val excite = if (reactExcited) startle else 0f
         val surprise = startle - excite
@@ -440,12 +512,12 @@ object MoMotion {
             baseBrow(mood) +
                 surprise * 0.9f + excite * 0.5f +
                 peek * 0.5f + abs(glance) * 0.3f +
-                exit * 0.2f - whirl * 0.3f
+                exit * 0.2f - whirl * 0.3f - sideEye * 0.35f
             ) * (1f - sleep * 0.6f)
         val smile = (
             baseSmile(mood) +
                 excite * 0.9f - surprise * 0.5f +
-                peek * 0.35f + exit * 0.5f - whirl * 0.25f
+                peek * 0.35f + exit * 0.5f - whirl * 0.25f - sideEye * 0.6f
             ) * (1f - sleep * 0.5f)
 
         return MoPose(
@@ -468,6 +540,9 @@ object MoMotion {
             brow = brow.coerceIn(-1f, 1f),
             browSkew = (abs(glance) * 0.8f + peek * 0.3f).coerceIn(0f, 1f),
             smile = smile.coerceIn(-1f, 1f),
+            sideEye = sideEye,
+            propMask = if (propsOn) propMask else 0,
+            propSinceMs = if (propsOn) propSince else -1L,
             whirl = whirl,
             whirlTurn = whirlSince?.let { whirlTurn(it, whirlSlow) } ?: 0f,
             idleAmplitude = profile.idleAmplitude,

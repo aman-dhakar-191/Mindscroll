@@ -217,6 +217,7 @@ object Mo {
         "This reel has been going a while. I'm not judging. A little.",
         "Is it stuck, or are we?",
         "Hmm? Something on this one I missed?",
+        "*side-eye* ...you good?",
     )
     internal val staring = listOf(
         "Hello? Blink once if you can hear me.",
@@ -228,7 +229,8 @@ object Mo {
         "{x} minutes in one go. Neck stretch?",
         "We've been in here {x} minutes. I'm stretching. You could too.",
         "*stretches* {x} minutes. Something far away, for a second?",
-        "{x} minutes without a pause. Water? I'll hold your place.",
+        "{x} minutes without a pause. Touch grass? I'll count the blades.",
+        "{x} minutes. I grew grass down here out of spite. Come see it?",
     )
     internal val quickReturn = listOf(
         "Back already? You just left.",

@@ -62,11 +62,20 @@ become due. Each fires once per occasion.
 
 | Habit | Detected | Mo does |
 |---|---|---|
-| Scrolling too fast | 5+ reels within 10 s (not again for 30 s) | dizzy: fast spiral eyes, wobble |
-| Lingering on one reel | 45 s since the last counted reel, still in the app | leans in with raised brows, and a line |
+| Scrolling too fast | 5+ reels within 10 s (not again for 30 s) | panic: fast spiral eyes, sweat drops, speed lines |
+| Lingering on one reel | 45 s since the last counted reel, still in the app | the side-eye (unamused half-lids, pupils slid sideways, a flat mouth) and a slow "...", and a line |
 | Staring at one reel | 2 min since the last counted reel | mesmerised: slow spiral eyes, and a line |
-| A long stretch | every 20 min in one session | stretch and yawn, and a line saying how long |
-| Straight back | back in the same app within 45 s of leaving | double take (a glance, then a lean in), and a line |
+| A long stretch | every 20 min in one session | stretch and yawn while a tuft of grass grows at his feet ("touch grass"), and a line saying how long |
+| Straight back | back in the same app within 45 s of leaving | double take, then a "?!" pops up, and a line |
+| Three quick taps | taps within 650 ms of each other | crying with laughter: the laughing face with tears streaming |
+
+### Meme props
+
+Reaction faces borrow the same trick as reaction memes: exaggerate the face and add a prop. Props
+(`MoProp`) pop in with a little overshoot, hold, then shrink away, and several can show at once.
+They are drawn as plain shapes (the "?" and "!" are paths, not font glyphs), attached to Mo so they
+wobble and hop with him. Sweat and tears are a deeper blue so they show on every mood colour. While
+tears are showing the laughing face stays too, otherwise they would read as sadness.
 
 Lingering and staring only count after a reel was counted in the session, so reading comments or
 messages in the app is not "stuck on a reel". All lines go through the same policy as the rest of
