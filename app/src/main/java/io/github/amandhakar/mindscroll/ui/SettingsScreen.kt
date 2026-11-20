@@ -124,15 +124,15 @@ fun SettingsScreen(onBack: () -> Unit) {
                         settings.mascotSize = mascotSize
                     }
                     Text("Animation style", style = MaterialTheme.typography.bodyLarge)
-                    InfoChoice("Calm · reduced idle motion", motionStyle == Settings.MotionStyle.CALM) {
+                    InfoChoice("Calm · soft reactions, no bounce, no idle sway", motionStyle == Settings.MotionStyle.CALM) {
                         motionStyle = Settings.MotionStyle.CALM
                         settings.motionStyle = motionStyle
                     }
-                    InfoChoice("Balanced", motionStyle == Settings.MotionStyle.BALANCED) {
+                    InfoChoice("Balanced · a quick pop with one gentle bounce", motionStyle == Settings.MotionStyle.BALANCED) {
                         motionStyle = Settings.MotionStyle.BALANCED
                         settings.motionStyle = motionStyle
                     }
-                    InfoChoice("Playful · bigger reactions to repeated taps", motionStyle == Settings.MotionStyle.PLAYFUL) {
+                    InfoChoice("Playful · springy, bigger reactions and quicker gestures", motionStyle == Settings.MotionStyle.PLAYFUL) {
                         motionStyle = Settings.MotionStyle.PLAYFUL
                         settings.motionStyle = motionStyle
                     }

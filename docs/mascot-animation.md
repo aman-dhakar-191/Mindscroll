@@ -1,0 +1,67 @@
+# Mo's animation system
+
+How Mo moves, and how to check it on a device.
+
+## How it fits together
+
+- `MoMotion.pose(...)` turns a clock and a few start times into one `MoPose`. The face (brows,
+  eyes, mouth) and the body (squash, stretch, hop, lean) are both drawn from that single pose,
+  so they cannot drift apart.
+- `MotionProfile` (CALM / BALANCED / PLAYFUL) holds the timing and physics of a style. The
+  Settings choice maps to it through `Settings.MotionStyle.profile`.
+- `MoPainter` draws a pose. `MoView` (overlay windows) and `MoFace` (Compose home screen) play it.
+- A reaction is a crouch, a fast pop, then a damped spring that overshoots and settles. The
+  spring is a closed-form function, so there is no per-frame integration and no state.
+
+| | CALM | BALANCED | PLAYFUL |
+|---|---|---|---|
+| Crouch before the pop | 50 ms | 90 ms | 140 ms |
+| Pop rise | 200 ms | 120 ms | 80 ms |
+| Settle | 520 ms, no overshoot | 630 ms, one rebound | 900 ms, several rebounds |
+| Reaction size | 0.8x | 1.1x | 1.45x |
+| Gesture speed | 0.8x | 1x | 1.3x |
+| Idle sway | off in the overlay; small, ~15 fps on the home screen | on, ~20 fps | on, ~25 fps |
+
+## Events and what Mo does
+
+| Event | Body | Face |
+|---|---|---|
+| Reel counted | crouch, stretch up, squash on the rebound, settle | raised brows, wide eyes, "o" mouth |
+| Fast scroll (3+ reels within 1.5 s) | same, as joy | `^ ^` eyes, open grin |
+| App entry | leans out | raised brows, bigger smile |
+| App switch | turns toward a sideways glance | one brow higher, eyes dart and return |
+| Back after a break | wakes with a stretch and yawn, or hops joyfully if awake | joy |
+| App exit | eases into a lean and turns away | eyes close in a smile |
+| Three quick taps | squash, then a giggle | joy |
+
+An event that arrives mid-animation continues from the current pose: a reaction restarts from
+where Mo is (and skips the crouch), and gestures blend out of the pose they interrupted.
+
+## Battery
+
+- Event animations draw at display rate only while they run.
+- Idle sway redraws at the profile's idle rate, only while the screen is on.
+- The Compose `MoFace` sleeps between frames when idle, stops while the app is paused, and
+  has no second always-running animation.
+- With the system animation scale at 0, Mo uses the CALM profile and no idle motion.
+
+## On-device checks
+
+Run each style (Settings, Animation style) through each scenario.
+
+1. **Reel counter.** Scroll one reel in a tracked app. Mo should crouch, pop, and settle with a
+   rebound whose size and bounciness match the style. CALM never bounces; PLAYFUL rebounds more
+   than once.
+2. **Interruption.** Scroll three reels quickly. Mo should keep moving smoothly, with no snap
+   back to rest between reels and no second crouch, then turn excited on the third.
+3. **Entry / switch / return / exit.** Open a tracked app (lean out), switch to another (sideways
+   glance), leave for 5+ minutes and return (wake or joyful hop), then close it (turns away
+   smiling, then the patch goes). Each should look different from the others.
+4. **Sleep.** Let Mo fall asleep, then tap Mo or return to the app: stretch, yawn, eyes open.
+5. **Edges.** Check nothing is clipped at the top or sides at the largest mascot size, on a
+   device with a camera cut-out and one without.
+6. **Reduced motion.** Turn off animations in Developer options. Mo stays still when idle and
+   only reacts softly.
+7. **Battery.** Leave the overlay on with the screen on for 10 minutes: `adb shell dumpsys
+   gfxinfo io.github.amandhakar.mindscroll` should show a low frame count while nothing is
+   happening, and none with the screen off.

@@ -35,6 +35,7 @@ import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.mascot.SessionReaction
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.service.AppSession
@@ -76,6 +77,8 @@ class CounterOverlay(
     private var display = settings.display()
     private var lastPokeAtMs = 0L
     private var consecutivePokes = 0
+    private var lastReelAtMs = 0L
+    private var rapidReels = 0
 
     private var session: AppSession? = null
     private var lastSessionPackage: String? = null
@@ -119,6 +122,7 @@ class CounterOverlay(
             }
             views?.let {
                 it.mo.mood = newState.mood
+                it.mo.profile = profile()
                 it.mo.idleMotion = screenOn && display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
                 bindInfoMode(it)
@@ -133,6 +137,7 @@ class CounterOverlay(
             val views = bubble ?: addBubble()?.also { bubble = it; it.mo.asleep = moAsleep }
             views?.let {
                 it.mo.mood = newState.mood
+                it.mo.profile = profile()
                 it.mo.idleMotion = screenOn && display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
                 if (displayChanged) {
@@ -291,6 +296,7 @@ class CounterOverlay(
 
         val patchMoSize = patchMoSize()
         val mo = MoView(service).apply {
+            profile = this@CounterOverlay.profile()
             idleMotion = this@CounterOverlay.display.motionStyle != Settings.MotionStyle.CALM
             contentDescription = "Mo, tap to interact"
             setOnClickListener { poke(this) }
@@ -390,7 +396,7 @@ class CounterOverlay(
                 patch?.mo?.exitSession()
                 bubble?.mo?.exitSession()
                 handler.removeCallbacks(finishExit)
-                handler.postDelayed(finishExit, MoMotion.EXIT_MS)
+                handler.postDelayed(finishExit, profile().exitMs)
             }
         } else {
             handler.removeCallbacks(finishExit)
@@ -418,14 +424,17 @@ class CounterOverlay(
         if (newSession != null || !exitPending) refresh()
     }
 
+    /**
+     * One gesture per session edge, each with its own face and body so they read differently:
+     * entry leans out with raised brows and a smile, a switch glances sideways, coming back
+     * after a break wakes (or, if awake, beams with a joyful hop), and exit turns away smiling.
+     */
     private fun playSessionReaction(mo: MoView, reaction: SessionReaction) {
         when (reaction) {
             SessionReaction.FIRST_ENTRY -> mo.peek()
-            SessionReaction.APP_SWITCH -> mo.react(
-                if (display.motionStyle == Settings.MotionStyle.PLAYFUL) 1.25f else 1.1f,
-            )
+            SessionReaction.APP_SWITCH -> mo.glance()
             SessionReaction.RETURN_AFTER_BREAK -> {
-                if (mo.asleep) mo.wakeUp() else mo.peek()
+                if (mo.asleep) mo.wakeUp() else mo.react(1.15f, excited = true)
             }
             SessionReaction.APP_EXIT, SessionReaction.NONE -> Unit
         }
@@ -561,6 +570,7 @@ class CounterOverlay(
         val size = bubbleSize()
         val bubbleMoSize = bubbleMoSize()
         val mo = MoView(service).apply {
+            profile = this@CounterOverlay.profile()
             idleMotion = this@CounterOverlay.display.motionStyle != Settings.MotionStyle.CALM
             contentDescription = "Mo, tap to interact"
             setOnClickListener { poke(this) }
@@ -699,6 +709,33 @@ class CounterOverlay(
 
     // --- Helpers ---
 
+    /** The user's motion style as animation timing and physics. */
+    private fun profile(): MotionProfile = display.motionStyle.profile
+
+    /**
+     * Squashes [view] to the given scale and lifts it [hopPx], from wherever it is right now, then
+     * springs everything back to rest with the style's overshoot. Starting from the current
+     * values (not fixed ones) means a second kick mid-animation continues smoothly instead of
+     * snapping, and always animating all three properties back to rest means cancelling a kick
+     * can never strand the view part-way. [delayMs] holds the launch until the body's crouch
+     * releases, so the hop leaves the ground with the pop.
+     */
+    private fun kick(view: View, peakX: Float, peakY: Float, hopPx: Float, p: MotionProfile, delayMs: Long = 0L) {
+        view.animate().cancel()
+        view.animate().scaleX(peakX).scaleY(peakY).translationY(-hopPx)
+            .setStartDelay(delayMs)
+            .setDuration((p.riseMs * 0.6f).toLong().coerceAtLeast(40L))
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                view.animate().scaleX(1f).scaleY(1f).translationY(0f)
+                    .setStartDelay(0L)
+                    .setDuration((p.settleMs * 0.5f).toLong())
+                    .setInterpolator(OvershootInterpolator((1f - p.damping) * 5f))
+                    .start()
+            }
+            .start()
+    }
+
     /** A direct tap on Mo is a small interaction; the surrounding island still opens details. */
     private fun poke(mo: MoView) {
         val now = SystemClock.uptimeMillis()
@@ -707,40 +744,39 @@ class CounterOverlay(
         if (mo.asleep) {
             mo.wakeUp()
         } else {
-            mo.react()
-            mo.animate().cancel()
-            val playful = display.motionStyle == Settings.MotionStyle.PLAYFUL
+            val p = profile()
             val repeated = consecutivePokes >= 3
+            // Tickled: the third quick tap in a row turns the startle into a giggle.
+            mo.react(excited = repeated)
+            val playful = display.motionStyle == Settings.MotionStyle.PLAYFUL
             val squash = when {
                 repeated && playful -> 0.78f
                 playful -> 0.88f
                 display.motionStyle == Settings.MotionStyle.CALM -> 0.97f
                 else -> 0.94f
             }
-            mo.scaleX = squash
-            mo.scaleY = if (repeated && playful) 1.12f else squash
-            mo.animate().scaleX(1f).scaleY(1f)
-                .setDuration(if (display.motionStyle == Settings.MotionStyle.CALM) 180 else 300)
-                .setInterpolator(OvershootInterpolator(if (playful) 3.5f else 2f))
-                .start()
+            kick(mo, squash, if (repeated && playful) 1.12f else squash, hopPx = 0f, p = p)
         }
     }
 
-    /** When the count goes up: the number pops, and Mo hops and looks surprised. */
+    /**
+     * When the count goes up: the number pops and Mo reacts. The pop and Mo are one gesture
+     * with one set of timings, and a reel arriving mid-reaction carries on from the current
+     * pose. A run of quick reels (a fast scroll) turns the startle into excitement.
+     */
     private fun bump(count: View, mo: MoView) {
-        val intensity = when (display.motionStyle) {
-            Settings.MotionStyle.CALM -> 1.0f
-            Settings.MotionStyle.BALANCED -> 1.18f
-            Settings.MotionStyle.PLAYFUL -> 1.42f
-        }
-        mo.react(intensity)
-        count.animate().cancel()
-        count.scaleX = 1.35f
-        count.scaleY = 1.35f
-        count.animate().scaleX(1f).scaleY(1f).setDuration(350).setInterpolator(OvershootInterpolator(3f)).start()
-        mo.animate().cancel()
-        mo.translationY = -dp(4).toFloat()
-        mo.animate().translationY(0f).setDuration(300).setInterpolator(OvershootInterpolator(4f)).start()
+        val now = SystemClock.uptimeMillis()
+        val p = profile()
+        val sinceLastReel = now - lastReelAtMs
+        rapidReels = if (sinceLastReel <= RAPID_REEL_MS) rapidReels + 1 else 1
+        lastReelAtMs = now
+        // Mid-reaction, the body skips its crouch (see MoMotion.anticipationLength), so the hop must too.
+        val chained = sinceLastReel < p.reactMs / 2
+        mo.react(excited = rapidReels >= RAPID_REELS_FOR_EXCITEMENT && mo.mood != Mood.DIZZY && mo.mood != Mood.SLEEPY)
+        val peak = 1f + 0.25f * p.hop + 0.05f
+        kick(count, peak, peak, hopPx = 0f, p = p)
+        // Mo hops as the crouch releases; the body's own squash and stretch are drawn by MoView.
+        kick(mo, 1f, 1f, hopPx = dp(4) * p.hop.coerceAtMost(1.25f), p = p, delayMs = if (chained) 0L else MoMotion.anticipationLength(p, 0f))
     }
 
     private fun compact(total: Long): String = if (total >= 1000) "${total / 1000}k" else total.toString()
@@ -796,6 +832,9 @@ class CounterOverlay(
 
     private companion object {
         const val PANEL_TIMEOUT_MS = 10_000L
+        /** Reels closer together than this count as a fast scroll. */
+        const val RAPID_REEL_MS = 1_500L
+        const val RAPID_REELS_FOR_EXCITEMENT = 3
         const val PATCH_PADDING_DP = 8
         const val INFO_FLIP_MS = 2_800L
         const val SNOOZE_MS = 60 * 60_000L
