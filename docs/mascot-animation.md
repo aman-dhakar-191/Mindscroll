@@ -15,11 +15,11 @@ How Mo moves, and how to check it on a device.
 
 | | CALM | BALANCED | PLAYFUL |
 |---|---|---|---|
-| Crouch before the pop | 50 ms | 90 ms | 140 ms |
-| Pop rise | 200 ms | 120 ms | 80 ms |
-| Settle | 520 ms, no overshoot | 630 ms, one rebound | 900 ms, several rebounds |
+| Crouch before the pop | 80 ms | 150 ms | 220 ms |
+| Pop rise | 320 ms | 200 ms | 130 ms |
+| Settle | 850 ms, no overshoot | 1000 ms, one rebound | 1350 ms, several rebounds |
 | Reaction size | 0.8x | 1.1x | 1.45x |
-| Gesture speed | 0.8x | 1x | 1.3x |
+| Gesture speed (1x = 680 ms peek) | 0.55x | 0.65x | 0.85x |
 | Idle sway | off in the overlay; small, ~15 fps on the home screen | on, ~20 fps | on, ~25 fps |
 
 ## Events and what Mo does

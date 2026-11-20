@@ -724,12 +724,12 @@ class CounterOverlay(
         view.animate().cancel()
         view.animate().scaleX(peakX).scaleY(peakY).translationY(-hopPx)
             .setStartDelay(delayMs)
-            .setDuration((p.riseMs * 0.6f).toLong().coerceAtLeast(40L))
+            .setDuration(p.riseMs)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 view.animate().scaleX(1f).scaleY(1f).translationY(0f)
                     .setStartDelay(0L)
-                    .setDuration((p.settleMs * 0.5f).toLong())
+                    .setDuration((p.settleMs * 0.6f).toLong())
                     .setInterpolator(OvershootInterpolator((1f - p.damping) * 5f))
                     .start()
             }
