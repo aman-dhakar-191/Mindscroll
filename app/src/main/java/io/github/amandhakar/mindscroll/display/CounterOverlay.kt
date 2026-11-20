@@ -140,6 +140,7 @@ class CounterOverlay(
                 it.mo.profile = profile()
                 it.mo.idleMotion = screenOn && display.motionStyle != Settings.MotionStyle.CALM
                 it.count.text = compact(newState.total)
+                bindBubbleCount()
                 if (displayChanged) {
                     val params = it.root.layoutParams as WindowManager.LayoutParams
                     params.width = bubbleSize()
@@ -420,6 +421,7 @@ class CounterOverlay(
             bindSession(it)
             layoutPatch(it, apply = true)
         }
+        bindBubbleCount()
         // Keep the camera island alive for Mo's farewell, then remove it after the animation.
         if (newSession != null || !exitPending) refresh()
     }
@@ -450,18 +452,45 @@ class CounterOverlay(
             return
         }
         val app = ReelApps.forPackage(current.packageName, TrackedApps.label(current.packageName))
-        val timerNeeded = display.infoMode == Settings.InfoMode.TIMER ||
-            (display.infoMode == Settings.InfoMode.BOTH && display.autoScroll)
+        val mode = infoMode()
+        val timerNeeded = mode == Settings.InfoMode.TIMER ||
+            (mode == Settings.InfoMode.BOTH && display.autoScroll)
         views.timer.base = current.timerBase
         views.timer.setTextColor(app.accent.toInt())
         views.timer.visibility = if (timerNeeded) View.VISIBLE else View.GONE
         if (timerNeeded) views.timer.start() else views.timer.stop()
         bindInfoMode(views)
-        views.root.contentDescription = "Mindscroll: time in ${app.label} and today's reels. Tap for details."
+        views.root.contentDescription = if (reelContext()) {
+            "Mindscroll: time in ${app.label} and today's reels. Tap for details."
+        } else {
+            "Mindscroll: time in ${app.label}. Tap for details."
+        }
+    }
+
+    /**
+     * Whether the app in front counts reels. Every tracked app has a timer; the reel counter
+     * belongs to the apps set to count reels. With no session (home screen, other apps) the
+     * counter is shown as usual.
+     */
+    private fun reelContext(): Boolean = session?.packageName?.let(TrackedApps::countsReels) ?: true
+
+    /**
+     * What the user chose to show, except that in an app that doesn't count reels a counter
+     * would sit at today's total for nothing, so the timer is shown instead.
+     */
+    private fun infoMode(): Settings.InfoMode = when {
+        display.infoMode == Settings.InfoMode.HIDDEN -> Settings.InfoMode.HIDDEN
+        reelContext() -> display.infoMode
+        else -> Settings.InfoMode.TIMER
+    }
+
+    /** The bubble's badge is a reel count, so it goes with the counter. */
+    private fun bindBubbleCount() {
+        bubble?.count?.visibility = if (reelContext()) View.VISIBLE else View.GONE
     }
 
     private fun bindInfoMode(views: PatchViews) {
-        when (display.infoMode) {
+        when (infoMode()) {
             Settings.InfoMode.TIMER -> {
                 views.info.visibility = if (session == null) View.GONE else View.VISIBLE
                 views.info.stopFlipping()
@@ -497,7 +526,7 @@ class CounterOverlay(
         val timerWidth = views.timer.paint.measureText("00:00").toInt() + dp(12)
         val countWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(12)
         val moWidth = moSize + dp(4)
-        val infoWidth = if (display.infoMode == Settings.InfoMode.HIDDEN) 0 else when (display.infoMode) {
+        val infoWidth = if (infoMode() == Settings.InfoMode.HIDDEN) 0 else when (infoMode()) {
             Settings.InfoMode.TIMER -> if (session == null) 0 else timerWidth
             Settings.InfoMode.COUNTER -> countWidth
             Settings.InfoMode.BOTH -> maxOf(dp(58), timerWidth, countWidth)

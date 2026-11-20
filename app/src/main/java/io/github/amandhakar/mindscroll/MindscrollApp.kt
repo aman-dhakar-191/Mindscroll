@@ -37,8 +37,12 @@ class MindscrollApp : Application() {
         CounterNotification.createChannels(this)
         TrackedApps.labeler = ::appLabel
         TrackedApps.set(settings.trackedApps)
+        TrackedApps.setReelPackages(settings.reelApps)
         appScope.launch(Dispatchers.Main) {
             settings.observeTrackedApps().collect { TrackedApps.set(it) }
+        }
+        appScope.launch(Dispatchers.Main) {
+            settings.observeReelApps().collect { TrackedApps.setReelPackages(it) }
         }
     }
 

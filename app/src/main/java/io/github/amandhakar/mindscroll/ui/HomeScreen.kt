@@ -255,13 +255,18 @@ private fun AppRow(stat: AppStat, share: Float) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text("${stat.reels} reels", fontWeight = FontWeight.SemiBold)
+            // Apps that don't count reels show their time alone.
+            if (stat.reels > 0) {
+                Text("${stat.reels} reels", fontWeight = FontWeight.SemiBold)
+                Text("  ·  ", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Text(
-                "  ·  ${Durations.format(stat.timeMs)}",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Durations.format(stat.timeMs),
+                fontWeight = if (stat.reels > 0) FontWeight.Normal else FontWeight.SemiBold,
+                color = if (stat.reels > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
             )
         }
-        Box(
+        if (stat.reels > 0) Box(
             Modifier
                 .fillMaxWidth()
                 .height(6.dp)

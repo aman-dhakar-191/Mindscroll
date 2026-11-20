@@ -88,6 +88,22 @@ class Settings(context: Context) {
         get() = prefs.getStringSet(KEY_TRACKED_APPS, null)?.toSet() ?: ReelApps.known.keys
         set(value) = prefs.edit().putStringSet(KEY_TRACKED_APPS, value).apply()
 
+    /** Apps that count reels; null until the user chooses (see TrackedApps.countsReels). */
+    var reelApps: Set<String>?
+        get() = prefs.getStringSet(KEY_REEL_APPS, null)?.toSet()
+        set(value) = prefs.edit().apply {
+            if (value == null) remove(KEY_REEL_APPS) else putStringSet(KEY_REEL_APPS, value)
+        }.apply()
+
+    fun observeReelApps(): Flow<Set<String>?> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_REEL_APPS) trySend(reelApps)
+        }
+        trySend(reelApps)
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.conflate()
+
     fun observeTrackedApps(): Flow<Set<String>> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KEY_TRACKED_APPS) trySend(trackedApps)
@@ -121,5 +137,6 @@ class Settings(context: Context) {
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"
+        const val KEY_REEL_APPS = "reel_apps"
     }
 }
