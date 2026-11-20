@@ -7,12 +7,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * The last few hundred things the trackers noticed and what they decided, so a wrong count can
+ * The last couple of thousand things the trackers noticed and what they decided, so a wrong count can
  * be explained from the phone ("Detection log" on the home screen). In memory only: it holds
  * view ids and numbers, never text from other apps, and is gone when the app process ends.
  */
 object DetectionLog {
-    private const val MAX = 400
+    private const val MAX = 2000
     private val time = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
     private val lines = ArrayDeque<String>()
     private val _entries = MutableStateFlow<List<String>>(emptyList())
@@ -24,6 +24,10 @@ object DetectionLog {
         while (lines.size > MAX) lines.removeFirst()
         _entries.value = lines.toList()
     }
+
+    /** The whole log, oldest first, as text for copying or saving to a file. */
+    @Synchronized
+    fun text(): String = lines.joinToString("\n")
 
     @Synchronized
     fun clear() {

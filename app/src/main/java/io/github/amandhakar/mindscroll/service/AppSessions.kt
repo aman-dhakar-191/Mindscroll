@@ -33,6 +33,9 @@ class AppSessions(
     var current: AppSession? = null
         private set
 
+    /** Where session starts and ends are explained, for the detection log. Empty by default. */
+    var log: (String) -> Unit = {}
+
     private var lastSeenAt = 0L
     /** Time up to which the current session's usage was already handed out. */
     private var countedUntil = 0L
@@ -51,9 +54,10 @@ class AppSessions(
             return
         }
         // Switching straight from another watched app: close that one first.
-        if (current != null) end()
+        if (current != null) end("switched to $packageName")
         val openNumber = (opensToday[packageName] ?: 0) + 1
         opensToday[packageName] = openNumber
+        log("session: started $packageName (open #$openNumber today)")
         current = AppSession(
             packageName,
             startedAt = now,
@@ -67,7 +71,7 @@ class AppSessions(
     /** The user changed which apps are tracked. A session in an app no longer tracked ends. */
     fun setPackages(newPackages: Set<String>) {
         packages = newPackages
-        if (current?.packageName?.let { it !in newPackages } == true) end()
+        if (current?.packageName?.let { it !in newPackages } == true) end("no longer tracked")
     }
 
     /**
@@ -78,12 +82,14 @@ class AppSessions(
         val session = current ?: return
         rollOverDay(now)
         when {
-            !interactive -> end()
+            !interactive -> end("screen off")
             front == session.packageName -> lastSeenAt = now
             front != null && front in packages -> onAppEvent(front, now)
             // Another app in front (or nothing known for a long while): give it a moment.
-            front != null && now - lastSeenAt >= AWAY_MS -> end()
-            front == null && now - lastSeenAt >= UNKNOWN_MS -> end()
+            front != null && now - lastSeenAt >= AWAY_MS ->
+                end("${describeFront(front)} in front for ${(now - lastSeenAt) / 1000}s")
+            front == null && now - lastSeenAt >= UNKNOWN_MS ->
+                end("couldn't tell what was in front for ${(now - lastSeenAt) / 1000}s")
         }
     }
 
@@ -126,11 +132,21 @@ class AppSessions(
         current = current?.copy(timerBase = now)
     }
 
-    private fun end() {
+    private fun end(reason: String) {
         val session = current ?: return
+        log("session: ended ${session.packageName} — $reason")
         takeCurrentUsage(session.packageName)
         current = null
     }
+
+    /**
+     * Names what was in front without recording which untracked app the user was in: system
+     * windows (a screenshot, the notification shade, the keyboard) by package, anything else
+     * as "another app".
+     */
+    private fun describeFront(front: String): String =
+        if (front == "android" || front.startsWith("com.android.") || front.startsWith("com.google.android.inputmethod")) front
+        else "another app"
 
     companion object {
         /** Another app in front this long ends the session (share sheets and the like are shorter). */

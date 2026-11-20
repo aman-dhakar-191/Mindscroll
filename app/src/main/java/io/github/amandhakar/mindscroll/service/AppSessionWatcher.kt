@@ -6,6 +6,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import io.github.amandhakar.mindscroll.data.Days
+import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +22,7 @@ class AppSessionWatcher(
     packages: Set<String>,
     private val onUsage: (AppUsage) -> Unit,
 ) {
-    private val sessions = AppSessions(packages) { Days.today() }
+    private val sessions = AppSessions(packages) { Days.today() }.also { it.log = DetectionLog::add }
     private val handler = Handler(Looper.getMainLooper())
     private val power = service.getSystemService(PowerManager::class.java)
     private val _session = MutableStateFlow<AppSession?>(null)

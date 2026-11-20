@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.view.View
+import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -447,6 +448,12 @@ class MoView @JvmOverloads constructor(
         val now = SystemClock.uptimeMillis()
         val amount = (intensity * effectiveProfile.reactScale).coerceIn(0.5f, 1.8f)
         reactFrom = if (reactStart == null) 0f else pose(now).react / amount
+        DetectionLog.add(
+            "mo: pop from ${"%.2f".format(java.util.Locale.ROOT, reactFrom)} " +
+                "(${if (kotlin.math.abs(reactFrom) > MoMotion.CHAIN_THRESHOLD) "already moving, no crouch" else "at rest, crouch first"}), " +
+                "size ${"%.2f".format(java.util.Locale.ROOT, amount)}, " +
+                "${effectiveProfile.riseMs}ms rise, ${effectiveProfile.settleMs}ms settle",
+        )
         reactionIntensity = intensity
         reactExcited = excited
         reactStart = now
@@ -492,6 +499,7 @@ class MoView @JvmOverloads constructor(
                 context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f,
             ) == 0f
         }.getOrDefault(false)
+        if (reducedMotion) DetectionLog.add("mo: system animation scale is 0 → reduced motion (calm profile, no idle sway)")
         postDelayed(blinker, MoMotion.nextBlinkDelayMs(profile = effectiveProfile))
     }
 
