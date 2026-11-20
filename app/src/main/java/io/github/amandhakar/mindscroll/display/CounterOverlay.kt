@@ -35,6 +35,7 @@ import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.MoTemperament
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.mascot.SessionReaction
 import io.github.amandhakar.mindscroll.mascot.Mood
@@ -80,6 +81,8 @@ class CounterOverlay(
     private var consecutivePokes = 0
     private var lastReelAtMs = 0L
     private var rapidReels = 0
+    /** Reels in a steady run (a minute or less apart); Mo gets used to it. See [MoTemperament]. */
+    private var steadyStreak = 0
 
     private var session: AppSession? = null
     private var lastSessionPackage: String? = null
@@ -864,20 +867,27 @@ class CounterOverlay(
         val p = profile()
         val sinceLastReel = now - lastReelAtMs
         rapidReels = if (sinceLastReel <= RAPID_REEL_MS) rapidReels + 1 else 1
+        steadyStreak = if (sinceLastReel <= MoTemperament.STEADY_GAP_MS) steadyStreak + 1 else 1
         lastReelAtMs = now
         // Mid-reaction, the body skips its crouch (see MoMotion.anticipationLength), so the hop must too.
         val chained = sinceLastReel < p.reactMs / 2
         val excited = rapidReels >= RAPID_REELS_FOR_EXCITEMENT && mo.mood != Mood.DIZZY && mo.mood != Mood.SLEEPY
+        // Tired is smaller and slower; a long run of reels is something Mo gets used to.
+        val temper = MoTemperament.reaction(mo.mood, steadyStreak)
         DetectionLog.add(
             "mo: reel #${state?.total} → ${if (excited) "excited" else "startle"}, " +
                 "${if (chained) "chained (no crouch)" else "fresh crouch"}, gap ${if (sinceLastReel > 60_000) ">1min" else "${sinceLastReel}ms"}, " +
-                "streak $rapidReels, ${display.motionStyle.name.lowercase()}",
+                "streak $rapidReels, run $steadyStreak (novelty ${"%.2f".format(java.util.Locale.ROOT, MoTemperament.novelty(steadyStreak))}, " +
+                "energy ${"%.2f".format(java.util.Locale.ROOT, MoTemperament.energy(mo.mood))}) → size ${"%.2f".format(java.util.Locale.ROOT, temper.size)}, " +
+                "tempo ${"%.2f".format(java.util.Locale.ROOT, temper.tempo)}, ${display.motionStyle.name.lowercase()}",
         )
-        mo.react(excited = excited)
-        val peak = 1f + 0.25f * p.hop + 0.05f
-        kick(count, peak, peak, hopPx = 0f, p = p)
+        mo.react(intensity = temper.size, excited = excited, tempo = temper.tempo)
+        val paced = p.paced(temper.tempo)
+        // The number pops with Mo: same size and pace.
+        val peak = 1f + (0.25f * p.hop + 0.05f) * temper.size
+        kick(count, peak, peak, hopPx = 0f, p = paced)
         // Mo hops as the crouch releases; the body's own squash and stretch are drawn by MoView.
-        kick(mo, 1f, 1f, hopPx = dp(4) * p.hop.coerceAtMost(1.25f), p = p, delayMs = if (chained) 0L else MoMotion.anticipationLength(p, 0f))
+        kick(mo, 1f, 1f, hopPx = dp(4) * p.hop.coerceAtMost(1.25f) * temper.size, p = paced, delayMs = if (chained) 0L else MoMotion.anticipationLength(paced, 0f))
     }
 
     private fun compact(total: Long): String = if (total >= 1000) "${total / 1000}k" else total.toString()

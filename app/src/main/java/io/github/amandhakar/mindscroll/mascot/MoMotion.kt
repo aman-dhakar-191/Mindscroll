@@ -73,6 +73,19 @@ data class MotionProfile(
     /** Scales the gap between blinks; below 1 = blinks more often. */
     val blinkGapScale: Float,
 ) {
+    /**
+     * This profile with the reaction's timing (crouch, rise, settle) stretched by [factor]; above
+     * 1 is slower. Used for one reaction at a time: a tired Mo reacts slower, a Mo used to the
+     * scrolling reacts briskly. Callers cache the result; it is not made per frame.
+     */
+    fun paced(factor: Float): MotionProfile =
+        if (factor == 1f) this
+        else copy(
+            anticipationMs = (anticipationMs * factor).toLong(),
+            riseMs = (riseMs * factor).toLong().coerceAtLeast(40L),
+            settleMs = (settleMs * factor).toLong().coerceAtLeast(120L),
+        )
+
     /** Real time a gesture takes at this style's speed. */
     val peekMs: Long get() = (MoMotion.PEEK_MS / gestureSpeed).toLong()
     val glanceMs: Long get() = (MoMotion.GLANCE_MS / gestureSpeed).toLong()
@@ -225,6 +238,13 @@ object MoMotion {
         }
     }
 
+    /**
+     * How big a reaction is: the event's own [intensity] (habituation and fatigue make it small)
+     * times the style's scale. Never so small that Mo seems frozen, never past the headroom.
+     */
+    fun reactAmount(intensity: Float, profile: MotionProfile): Float =
+        (intensity * profile.reactScale).coerceIn(0.25f, 1.8f)
+
     /** No crouch when already in motion: a wind-up mid-bounce reads as a glitch. */
     fun anticipationLength(profile: MotionProfile, from: Float): Long =
         if (abs(from) > CHAIN_THRESHOLD) 0L else profile.anticipationMs
@@ -339,6 +359,10 @@ object MoMotion {
         peekCarry: Float = 0f,
         exitCarry: Float = 0f,
         glanceCarry: Float = 0f,
+        /** Timing of the reaction in progress; differs from [profile] when Mo is tired or used to it. */
+        reactProfile: MotionProfile = profile,
+        /** An idle stretch and yawn (Mo stays awake), as opposed to waking up. */
+        yawnStartMs: Long? = null,
     ): MoPose {
         val sinceWake = wakeStartMs?.let { timeMs - it }
         val sinceReact = reactStartMs?.let { timeMs - it }
@@ -352,10 +376,10 @@ object MoMotion {
             Mood.SLEEPY -> 0.012f
         } * profile.idleAmplitude
 
-        val amount = (reactionIntensity * profile.reactScale).coerceIn(0.5f, 1.8f)
-        val crouchMs = anticipationLength(profile, reactFrom)
-        val anticipation = sinceReact?.let { anticipation(it, profile, reactFrom) } ?: 0f
-        val react = (sinceReact?.let { react(it - crouchMs, profile, reactFrom) } ?: 0f) * amount
+        val amount = reactAmount(reactionIntensity, profile)
+        val crouchMs = anticipationLength(reactProfile, reactFrom)
+        val anticipation = sinceReact?.let { anticipation(it, reactProfile, reactFrom) } ?: 0f
+        val react = (sinceReact?.let { react(it - crouchMs, reactProfile, reactFrom) } ?: 0f) * amount
 
         val peek = peekStartMs?.let {
             val since = timeMs - it
@@ -375,7 +399,7 @@ object MoMotion {
             sinceWake != null -> wakingSleep(sinceWake)
             else -> 0f
         }
-        val yawn = sinceWake?.let { yawn(it) } ?: 0f
+        val yawn = maxOf(sinceWake?.let { yawn(it) } ?: 0f, yawnStartMs?.let { yawn(timeMs - it) } ?: 0f)
         val startle = react.coerceAtLeast(0f)
         val excite = if (reactExcited) startle else 0f
         val surprise = startle - excite
