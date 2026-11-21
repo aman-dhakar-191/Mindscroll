@@ -29,12 +29,12 @@ import io.github.amandhakar.mindscroll.tracker.DetectionLog
  * Experimental. Mo comes out of the island, hovers, and goes back in, and the island stretches
  * toward Mo like a liquid and pulls it back in.
  *
- * It is a second, see-through window right under the island's own window, so the real island
- * stays as it is. The window draws a thin black strip along the island's bottom edge and a black
- * blob where Mo is; blurring the two and then sharpening the edge (alpha threshold) is the usual
- * "gooey" trick, and it joins them with a stretching neck when they are close. Mo is drawn on top
- * of the blob. The island's own window sits above, so Mo is hidden while it is inside the island
- * and appears as it leaves the black.
+ * It is a second, see-through window drawn over the island's own window, which stays as it is.
+ * The window draws a thin black strip along the island's bottom edge (clear of the numbers) and a
+ * black blob where Mo is; blurring the two and then sharpening the edge (alpha threshold) is the
+ * usual "gooey" trick, and it joins them with a stretching neck when they are close. Mo is drawn
+ * on top of the blob. Inside the island the strip and blob are black on black, so they only show
+ * where they leave it. The island's own Mo is hidden while this one is out.
  *
  * The blur needs Android 12 (API 31). Older phones get the same movement without the stretch.
  */
