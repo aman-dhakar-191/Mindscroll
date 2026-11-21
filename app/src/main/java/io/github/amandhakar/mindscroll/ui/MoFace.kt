@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import io.github.amandhakar.mindscroll.mascot.MoMotion
+import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoPainter
 import io.github.amandhakar.mindscroll.mascot.MoPose
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
@@ -73,7 +74,7 @@ fun MoFace(
     var reactStart by remember { mutableStateOf<Long?>(null) }
     var reactFrom by remember { mutableFloatStateOf(0f) }
     var moodChangedAt by remember { mutableStateOf<Long?>(null) }
-    var previousColor by remember { mutableIntStateOf(mood.color.toInt()) }
+    var previousColor by remember { mutableIntStateOf(MoLook.color(mood)) }
     var shownMood by remember { mutableStateOf(mood) }
 
     fun poseAt(t: Long): MoPose = MoMotion.pose(
@@ -131,7 +132,7 @@ fun MoFace(
     // Mood changes cross-fade the body colour and settle with a soft bounce.
     LaunchedEffect(mood) {
         if (mood != shownMood) {
-            previousColor = shownMood.color.toInt()
+            previousColor = MoLook.color(shownMood)
             shownMood = mood
             val t = withFrameMillis { it }
             moodChangedAt = t

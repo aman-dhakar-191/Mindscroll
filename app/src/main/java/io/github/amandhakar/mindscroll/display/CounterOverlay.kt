@@ -33,6 +33,7 @@ import android.widget.Toast
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
 import io.github.amandhakar.mindscroll.mascot.MoProp
@@ -121,6 +122,11 @@ class CounterOverlay(
                 "display: style=${newDisplay.motionStyle.name.lowercase()}, info=${newDisplay.infoMode.name.lowercase()}, " +
                     "mascot=${newDisplay.mascotSize.name.lowercase()}, patch=${newDisplay.cameraPatch}, bubble=${newDisplay.bubble}",
             )
+        }
+        if (displayChanged) {
+            // A new character or palette: the views read MoLook when they draw, so just redraw.
+            patch?.mo?.invalidate()
+            bubble?.mo?.invalidate()
         }
         if (newState.mood != lastLoggedMood) {
             DetectionLog.add("mo: mood ${lastLoggedMood?.name?.lowercase() ?: "start"} → ${newState.mood.name.lowercase()} (${newState.total} reels today)")
@@ -300,7 +306,7 @@ class CounterOverlay(
             else -> return false
         }
         removeSpeech()
-        val accent = (state?.mood ?: Mood.CHILL).color.toInt()
+        val accent = MoLook.color(state?.mood ?: Mood.CHILL)
         val view = TextView(service).apply {
             this.text = text
             setTextColor(Color.WHITE)
@@ -350,9 +356,10 @@ class CounterOverlay(
 
     private fun addPatch(): PatchViews? {
         val camera = topCutout()
-        val height = maxOf((camera?.height() ?: 0) + dp(12), dp(44))
-
         val patchMoSize = patchMoSize()
+        // A thin rim around the camera, not a tall pill: it used to be at least 44dp and centred on
+        // the camera, which ran it to the very top of the screen. Now a little screen shows above it.
+        val height = patchHeight(camera)
         val mo = MoView(service).apply {
             profile = this@CounterOverlay.profile()
             idleMotion = this@CounterOverlay.display.motionStyle != Settings.MotionStyle.CALM
@@ -410,7 +417,7 @@ class CounterOverlay(
         val params = overlayParams(touchable = true).apply {
             this.height = height
             gravity = Gravity.TOP or Gravity.START
-            y = if (camera != null) maxOf(0, camera.centerY() - height / 2) else dp(4)
+            y = patchTop(camera, height)
         }
         val views = PatchViews(pill, left, mo, timer, count, info, params, camera, bottomY = params.y + height)
         bindSession(views)
@@ -640,6 +647,11 @@ class CounterOverlay(
         (views.info.layoutParams as LinearLayout.LayoutParams).width = infoWidth
         val width = 2 * dp(PATCH_PADDING_DP) + moWidth + infoWidth + cameraGap(views.camera)
         views.params.width = width
+        // Mo's size can change while the island is up, and the island hugs whatever is tallest.
+        val height = patchHeight(views.camera)
+        views.params.height = height
+        views.params.y = patchTop(views.camera, height)
+        (views.root.background as? GradientDrawable)?.cornerRadius = height / 2f
         views.params.x = maxOf(0, (views.camera?.centerX() ?: (screenWidth() / 2)) - width / 2)
         if (apply) {
             views.left.requestLayout()
@@ -647,6 +659,12 @@ class CounterOverlay(
             runCatching { windowManager.updateViewLayout(views.root, views.params) }
         }
     }
+
+    private fun patchHeight(camera: Rect?): Int =
+        maxOf((camera?.height() ?: 0) + dp(PATCH_RIM_DP * 2), patchMoSize() + dp(4))
+
+    private fun patchTop(camera: Rect?, height: Int): Int =
+        if (camera != null) maxOf(dp(PATCH_TOP_GAP_DP), camera.centerY() - height / 2) else dp(4)
 
     private fun patchMoSize(): Int = dp(when (display.mascotSize) {
         Settings.MascotSize.COMPACT -> 28
@@ -666,7 +684,7 @@ class CounterOverlay(
         Settings.MascotSize.LARGE -> 70
     })
 
-    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(14) else dp(8)
+    private fun cameraGap(camera: Rect?): Int = if (camera != null) camera.width() + dp(8) else dp(8)
 
     /** Takes the patch off screen, fading it out unless [animate] is false (shutting down). */
     private fun removePatch(animate: Boolean = true) {
@@ -986,7 +1004,11 @@ class CounterOverlay(
         /** Reels closer together than this count as a fast scroll. */
         const val RAPID_REEL_MS = 1_500L
         const val RAPID_REELS_FOR_EXCITEMENT = 3
-        const val PATCH_PADDING_DP = 8
+        const val PATCH_PADDING_DP = 6
+        /** Island height beyond the camera hole, per side. */
+        const val PATCH_RIM_DP = 4
+        /** The island never starts closer than this to the top edge of the screen. */
+        const val PATCH_TOP_GAP_DP = 3
         const val INFO_FLIP_MS = 2_800L
         const val SNOOZE_MS = 60 * 60_000L
         /** How long a speech bubble stays up: a base plus reading time. */
@@ -1058,7 +1080,7 @@ private class PanelViews(
 
     fun bind(state: CounterState) {
         val mood = state.mood
-        val accent = mood.color.toInt()
+        val accent = MoLook.color(mood)
         mo.mood = mood
         moodText.text = "${Mo.NAME} · ${mood.title}".uppercase()
         moodText.setTextColor(accent)

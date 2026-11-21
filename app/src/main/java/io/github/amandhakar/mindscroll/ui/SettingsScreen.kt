@@ -1,6 +1,8 @@
 package io.github.amandhakar.mindscroll.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,10 +29,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.Settings
+import io.github.amandhakar.mindscroll.mascot.Mood
 
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: () -> Unit) {
-    val settings = LocalContext.current.app.settings
+    val context = LocalContext.current
+    val settings = context.app.settings
+    var character by remember { mutableStateOf(settings.mascotCharacter) }
+    var palette by remember { mutableStateOf(settings.mascotPalette) }
     var infoMode by remember { mutableStateOf(settings.infoMode) }
     var autoScroll by remember { mutableStateOf(settings.autoScroll) }
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
@@ -54,6 +60,32 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SectionHeader("Character and colour")
+            Panel {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        MoFace(Mood.CHILL, Modifier.size(104.dp))
+                    }
+                    MoLookPicker(
+                        character = character,
+                        palette = palette,
+                        onCharacter = {
+                            character = it
+                            settings.chooseCharacter(context, it)
+                        },
+                        onPalette = {
+                            palette = it
+                            settings.mascotPalette = it
+                        },
+                    )
+                    Text(
+                        "The app icon changes to match. Your launcher may take a few seconds to show it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             SectionHeader("Overlay display")
             Panel {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

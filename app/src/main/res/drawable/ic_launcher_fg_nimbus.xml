@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated: the nimbus launcher icon (chill mood, Classic colours), drawn on the same grid as the in-app character. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="21" android:translateY="23" android:scaleX="0.66" android:scaleY="0.66">
+        <path android:fillColor="#FF5EE6A8" android:pathData="M33,42H67A25,25 0 0 1 92,67V67A25,25 0 0 1 67,92H33A25,25 0 0 1 8,67V67A25,25 0 0 1 33,42Z"/>
+        <path android:fillColor="#FF5EE6A8" android:pathData="M10,42A21,21 0 1 0 52,42A21,21 0 1 0 10,42Z"/>
+        <path android:fillColor="#FF5EE6A8" android:pathData="M33,35A25,25 0 1 0 83,35A25,25 0 1 0 33,35Z"/>
+        <path android:fillColor="#FF5EE6A8" android:pathData="M64,52A15,15 0 1 0 94,52A15,15 0 1 0 64,52Z"/>
+        <path android:fillColor="#FF5EE6A8" android:pathData="M6,58A15,15 0 1 0 36,58A15,15 0 1 0 6,58Z"/>
+        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.28" android:pathData="M14,34A8,5 0 1 0 30,34A8,5 0 1 0 14,34Z"/>
+        <path android:fillColor="#FFFF6E8C" android:fillAlpha="0.38" android:pathData="M15,65A7,4.5 0 1 0 29,65A7,4.5 0 1 0 15,65Z"/>
+        <path android:fillColor="#FFFF6E8C" android:fillAlpha="0.38" android:pathData="M71,65A7,4.5 0 1 0 85,65A7,4.5 0 1 0 71,65Z"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M28,55Q35,43 42,55"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M58,55Q65,43 72,55"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M38,70Q50,82 62,70"/>
+    </group>
+</vector>

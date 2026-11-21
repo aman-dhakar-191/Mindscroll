@@ -40,8 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +64,7 @@ import io.github.amandhakar.mindscroll.mascot.MoMemory
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoMemories
 import io.github.amandhakar.mindscroll.mascot.MoPolicy
 import io.github.amandhakar.mindscroll.mascot.Mood
@@ -79,6 +83,8 @@ fun HomeScreen(
     onOpenSetup: () -> Unit,
     onOpenLog: () -> Unit,
     onOpenSettings: () -> Unit,
+    tour: Boolean = false,
+    onTourDone: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val app = context.app
@@ -96,12 +102,24 @@ fun HomeScreen(
         memory = runCatching { app.metrics.memoryFacts(tracker.id, tracker::itemLabel) }.getOrNull()
     }
 
+    // Where the areas the tour points at are on screen.
+    val scroll = rememberScrollState()
+    var heroBounds by remember { mutableStateOf<Rect?>(null) }
+    var weekBounds by remember { mutableStateOf<Rect?>(null) }
+    var menuBounds by remember { mutableStateOf<Rect?>(null) }
+
     Surface(Modifier.fillMaxSize()) {
+      Box(Modifier.fillMaxSize()) {
         Column(Modifier.safeDrawingPadding()) {
-            HomeTopBar(onOpenSetup = onOpenSetup, onOpenLog = onOpenLog, onOpenSettings = onOpenSettings)
+            HomeTopBar(
+                onOpenSetup = onOpenSetup,
+                onOpenLog = onOpenLog,
+                onOpenSettings = onOpenSettings,
+                menuModifier = Modifier.onGloballyPositioned { menuBounds = it.boundsInRoot() },
+            )
             Column(
                 Modifier
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scroll)
                     .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -118,7 +136,10 @@ fun HomeScreen(
                     }
                 }
 
-                Hero(total, mood, tracker.title.lowercase())
+                Hero(
+                    total, mood, tracker.title.lowercase(),
+                    Modifier.onGloballyPositioned { heroBounds = it.boundsInRoot() },
+                )
 
                 if (apps.isNotEmpty()) {
                     val maxReels = apps.maxOf { it.reels }.toFloat().coerceAtLeast(1f)
@@ -138,9 +159,23 @@ fun HomeScreen(
                 }
 
                 memory?.let { MemoryCard(MoMemory.insights(it)) }
-                WeekCard(week)
+                WeekCard(week, Modifier.onGloballyPositioned { weekBounds = it.boundsInRoot() })
             }
         }
+        if (tour) {
+            HomeTour(
+                targets = mapOf(TourStop.HERO to heroBounds, TourStop.WEEK to weekBounds, TourStop.MENU to menuBounds),
+                onStop = { stop ->
+                    when (stop) {
+                        TourStop.HERO -> scroll.animateScrollTo(0)
+                        TourStop.WEEK -> scroll.animateScrollTo(scroll.maxValue)
+                        else -> Unit
+                    }
+                },
+                onFinish = onTourDone,
+            )
+        }
+      }
     }
 }
 
@@ -149,7 +184,12 @@ fun HomeScreen(
  * an overflow menu on the right, where people look for them.
  */
 @Composable
-private fun HomeTopBar(onOpenSetup: () -> Unit, onOpenLog: () -> Unit, onOpenSettings: () -> Unit) {
+private fun HomeTopBar(
+    onOpenSetup: () -> Unit,
+    onOpenLog: () -> Unit,
+    onOpenSettings: () -> Unit,
+    menuModifier: Modifier = Modifier,
+) {
     var open by remember { mutableStateOf(false) }
     val dots = MaterialTheme.colorScheme.onSurfaceVariant
     Row(
@@ -162,7 +202,7 @@ private fun HomeTopBar(onOpenSetup: () -> Unit, onOpenLog: () -> Unit, onOpenSet
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
         )
-        Box {
+        Box(menuModifier) {
             IconButton(
                 onClick = { open = true },
                 modifier = Modifier.semantics { contentDescription = "More options" },
@@ -184,12 +224,12 @@ private fun HomeTopBar(onOpenSetup: () -> Unit, onOpenLog: () -> Unit, onOpenSet
 }
 
 @Composable
-private fun Hero(total: Long, mood: Mood, unit: String) {
+private fun Hero(total: Long, mood: Mood, unit: String, modifier: Modifier = Modifier) {
     val rested = Mo.isRested(total, mood)
-    val accent = Color(mood.color)
+    val accent = Color(MoLook.color(mood))
     val style = LocalContext.current.app.settings.motionStyle
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.extraLarge)
             .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.30f), accent.copy(alpha = 0.06f))))
@@ -296,11 +336,11 @@ private fun MemoryCard(insights: List<String>) {
 }
 
 @Composable
-private fun WeekCard(week: List<DayTotal>) {
+private fun WeekCard(week: List<DayTotal>, modifier: Modifier = Modifier) {
     if (week.isEmpty()) return
     val max = week.maxOf { it.total }.coerceAtLeast(1)
     val today = LocalDate.now().toEpochDay()
-    Panel {
+    Panel(modifier) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Last 7 days", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Row(

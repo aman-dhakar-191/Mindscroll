@@ -110,3 +110,22 @@ Run each style (Settings, Animation style) through each scenario.
 7. **Battery.** Leave the overlay on with the screen on for 10 minutes: `adb shell dumpsys
    gfxinfo io.github.amandhakar.mindscroll` should show a low frame count while nothing is
    happening, and none with the screen off.
+
+## Characters and colours (`MoLook`, `MoBodies`)
+
+Mo can look like one of six characters (Mo, Kit, Bun, Nimbus, Sprout, Boo) in one of five colour
+sets (Classic, Peach, Berry, Ocean, Mono). The user picks both in Settings, or in setup.
+
+- Every character wears Mo's face, so all moods, blinks, yawns and props work on all of them.
+  Only the silhouette differs: `MoBodies` draws what is behind the body (ears, leaves), the body,
+  and what is on it (whiskers, a nose), on the same 100 × 100 grid as the face. Bun's face sits a
+  little lower (`MoCharacter.faceDrop`); `MoCharacter.top` is each one's highest point at rest,
+  which the startle hop uses to stay inside the view.
+- A palette gives every mood its own body colour (`MoPalette.color`). Classic is `Mood.color`.
+- `MoLook` holds the current choice as Compose state. `Settings` writes it when the choice
+  changes (and on start), and everything that draws Mo reads it, so there is nothing to pass around.
+- The launcher icon follows the character: one `activity-alias` per character in the manifest,
+  and `LauncherIcon` enables the chosen one. The icon drawables (`ic_launcher_fg_*`) show the
+  Chill mood in Classic colours; a launcher icon can't change colour.
+- The camera island hugs the camera hole with a thin rim and never starts closer than 3dp to the
+  top of the screen (`CounterOverlay.patchHeight`, `patchTop`).

@@ -29,12 +29,89 @@
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop" />
+
+        <!--
+            One launcher entry per character; exactly one is enabled (LauncherIcon switches them).
+            Mo is the default. Each carries that character's icon, so the logo is whoever the user picked.
+        -->
+        <activity-alias
+            android:name=".LauncherMo"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_mo"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherKit"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_kit"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherBun"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_bun"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherNimbus"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_nimbus"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherSprout"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_sprout"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".LauncherBoo"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_boo"
+            android:label="@string/app_name"
+            android:targetActivity=".ui.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".service.TrackerAccessibilityService"
