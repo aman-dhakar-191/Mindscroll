@@ -21,7 +21,7 @@ class LiquidTimelineTest {
         val mid = (LiquidTimeline.OUT_END + LiquidTimeline.HOLD_END) / 2f
         assertEquals(1f, LiquidTimeline.position(mid), eps)
         assertTrue(LiquidTimeline.isOut(mid))
-        assertFalse(LiquidTimeline.isOut(0.05f))
+        assertFalse(LiquidTimeline.isOut(0.02f)) // still inside the island, before it comes out
         assertFalse(LiquidTimeline.isOut(0.95f))
     }
 
