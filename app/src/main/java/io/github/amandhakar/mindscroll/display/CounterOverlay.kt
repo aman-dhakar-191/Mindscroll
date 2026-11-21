@@ -67,6 +67,17 @@ class CounterOverlay(
     private val windowManager = service.getSystemService(WindowManager::class.java)
     private val handler = Handler(Looper.getMainLooper())
 
+    /** With the timer set to appear now and then: whether it is up right now. */
+    private var timerRevealed = false
+    private val revealTimer = Runnable {
+        setTimerRevealed(true)
+        handler.postDelayed(hideTimer, TIMER_REVEAL_MS)
+    }
+    private val hideTimer = Runnable {
+        setTimerRevealed(false)
+        scheduleTimerReveal()
+    }
+
     private var patch: PatchViews? = null
     private var bubble: BubbleViews? = null
     private var panel: PanelViews? = null
@@ -116,7 +127,12 @@ class CounterOverlay(
         val grew = state != null && newState.total > (state?.total ?: 0)
         state = newState
         val displayChanged = display != newDisplay
+        val revealChanged = display.timerReveal != newDisplay.timerReveal
         display = newDisplay
+        if (revealChanged) {
+            timerRevealed = false
+            scheduleTimerReveal()
+        }
         if (displayChanged) {
             DetectionLog.add(
                 "display: style=${newDisplay.motionStyle.name.lowercase()}, info=${newDisplay.infoMode.name.lowercase()}, " +
@@ -345,6 +361,8 @@ class CounterOverlay(
 
     fun removeAll() {
         handler.removeCallbacks(endSnooze)
+        handler.removeCallbacks(revealTimer)
+        handler.removeCallbacks(hideTimer)
         removeSpeech()
         removePatch(animate = false)
         bubble?.let { remove(it.root) }
@@ -466,6 +484,9 @@ class CounterOverlay(
         }
 
         session = newSession
+        // A new session (or a new timer base) starts its own 5- or 10-minute rhythm.
+        timerRevealed = false
+        scheduleTimerReveal()
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
             if (reaction == SessionReaction.APP_EXIT) {
@@ -563,10 +584,37 @@ class CounterOverlay(
      * What the user chose to show, except that in an app that doesn't count reels a counter
      * would sit at today's total for nothing, so the timer is shown instead.
      */
-    private fun infoMode(): Settings.InfoMode = when {
-        display.infoMode == Settings.InfoMode.HIDDEN -> Settings.InfoMode.HIDDEN
-        reelContext() -> display.infoMode
-        else -> Settings.InfoMode.TIMER
+    private fun infoMode(): Settings.InfoMode {
+        val wanted = when {
+            display.infoMode == Settings.InfoMode.HIDDEN -> Settings.InfoMode.HIDDEN
+            reelContext() -> display.infoMode
+            else -> Settings.InfoMode.TIMER
+        }
+        if (display.timerReveal == Settings.TimerReveal.ALWAYS || timerRevealed) return wanted
+        // The timer is between reveals: what is left is the counter, or nothing.
+        return when (wanted) {
+            Settings.InfoMode.TIMER -> Settings.InfoMode.HIDDEN
+            Settings.InfoMode.BOTH -> Settings.InfoMode.COUNTER
+            else -> wanted
+        }
+    }
+
+    /** Brings the timer up or puts it away, resizing the island around it. */
+    private fun setTimerRevealed(revealed: Boolean) {
+        timerRevealed = revealed
+        patch?.let {
+            bindSession(it)
+            layoutPatch(it, apply = true)
+        }
+    }
+
+    /** Plans the next time the timer shows, from how long the session has run. Nothing for Always. */
+    private fun scheduleTimerReveal() {
+        handler.removeCallbacks(revealTimer)
+        handler.removeCallbacks(hideTimer)
+        val current = session ?: return
+        val wait = display.timerReveal.nextRevealInMs(SystemClock.elapsedRealtime() - current.timerBase) ?: return
+        handler.postDelayed(revealTimer, wait)
     }
 
     /** The bubble's badge is a reel count, so it goes with the counter. */
@@ -1010,6 +1058,8 @@ class CounterOverlay(
         /** The island never starts closer than this to the top edge of the screen. */
         const val PATCH_TOP_GAP_DP = 3
         const val INFO_FLIP_MS = 2_800L
+        /** How long the timer stays up each time it shows, when it isn't always on. */
+        const val TIMER_REVEAL_MS = 8_000L
         const val SNOOZE_MS = 60 * 60_000L
         /** How long a speech bubble stays up: a base plus reading time. */
         const val SPEECH_MS = 3_000L
