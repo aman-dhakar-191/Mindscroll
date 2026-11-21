@@ -39,6 +39,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
     var palette by remember { mutableStateOf(settings.mascotPalette) }
     var infoMode by remember { mutableStateOf(settings.infoMode) }
     var autoScroll by remember { mutableStateOf(settings.autoScroll) }
+    var timerReveal by remember { mutableStateOf(settings.timerReveal) }
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
     var mascotSize by remember { mutableStateOf(settings.mascotSize) }
@@ -105,6 +106,21 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                     InfoChoice("Hide both", infoMode == Settings.InfoMode.HIDDEN) {
                         infoMode = Settings.InfoMode.HIDDEN
                         settings.infoMode = infoMode
+                    }
+                    if (infoMode == Settings.InfoMode.TIMER || infoMode == Settings.InfoMode.BOTH) {
+                        Text("Show the timer", style = MaterialTheme.typography.bodyLarge)
+                        InfoChoice("Always", timerReveal == Settings.TimerReveal.ALWAYS) {
+                            timerReveal = Settings.TimerReveal.ALWAYS
+                            settings.timerReveal = timerReveal
+                        }
+                        InfoChoice("For a few seconds every 5 minutes", timerReveal == Settings.TimerReveal.EVERY_5_MIN) {
+                            timerReveal = Settings.TimerReveal.EVERY_5_MIN
+                            settings.timerReveal = timerReveal
+                        }
+                        InfoChoice("For a few seconds every 10 minutes", timerReveal == Settings.TimerReveal.EVERY_10_MIN) {
+                            timerReveal = Settings.TimerReveal.EVERY_10_MIN
+                            settings.timerReveal = timerReveal
+                        }
                     }
                     PreferenceSwitch(
                         title = "Auto-scroll between timer and counter",

@@ -19,6 +19,24 @@ class Settings(context: Context) {
 
     enum class InfoMode { TIMER, COUNTER, BOTH, HIDDEN }
     enum class MascotSize { COMPACT, STANDARD, LARGE }
+
+    /**
+     * When the session timer is on show. Always is how it has been (and the default); the others
+     * keep it hidden and bring it up for a few seconds each time the session has run another
+     * 5 or 10 minutes.
+     */
+    enum class TimerReveal(val intervalMs: Long?) {
+        ALWAYS(null),
+        EVERY_5_MIN(5 * 60_000L),
+        EVERY_10_MIN(10 * 60_000L),
+        ;
+
+        /** Milliseconds until the next reveal, for a session that has run [elapsedMs]. Null for [ALWAYS]. */
+        fun nextRevealInMs(elapsedMs: Long): Long? {
+            val interval = intervalMs ?: return null
+            return interval - (elapsedMs.coerceAtLeast(0L) % interval)
+        }
+    }
     enum class MotionStyle {
         CALM, BALANCED, PLAYFUL;
 
@@ -39,6 +57,7 @@ class Settings(context: Context) {
         val mascotSize: MascotSize,
         val motionStyle: MotionStyle,
         val milestoneReactions: Boolean,
+        val timerReveal: TimerReveal = TimerReveal.ALWAYS,
         val character: MoCharacter = MoCharacter.MO,
         val palette: MoPalette = MoPalette.CLASSIC,
     )
@@ -98,6 +117,11 @@ class Settings(context: Context) {
             MoLook.palette = value
         }
 
+    var timerReveal: TimerReveal
+        get() = runCatching { TimerReveal.valueOf(prefs.getString(KEY_TIMER_REVEAL, TimerReveal.ALWAYS.name)!!) }
+            .getOrDefault(TimerReveal.ALWAYS)
+        set(value) = prefs.edit().putString(KEY_TIMER_REVEAL, value.name).apply()
+
     var milestoneReactions: Boolean
         get() = prefs.getBoolean(KEY_MILESTONE_REACTIONS, true)
         set(value) = prefs.edit().putBoolean(KEY_MILESTONE_REACTIONS, value).apply()
@@ -144,13 +168,13 @@ class Settings(context: Context) {
 
     fun display() = Display(
         cameraPatch, bubble, infoMode, autoScroll, mascotSize, motionStyle, milestoneReactions,
-        mascotCharacter, mascotPalette,
+        timerReveal, mascotCharacter, mascotPalette,
     )
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
-                key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE
+                key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE || key == KEY_TIMER_REVEAL
             ) trySend(display())
         }
         trySend(display())
@@ -169,6 +193,7 @@ class Settings(context: Context) {
         const val KEY_MOTION_STYLE = "motion_style"
         const val KEY_MILESTONE_REACTIONS = "milestone_reactions"
         const val KEY_MASCOT_CHARACTER = "mascot_character"
+        const val KEY_TIMER_REVEAL = "timer_reveal"
         const val KEY_MASCOT_PALETTE = "mascot_palette"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
