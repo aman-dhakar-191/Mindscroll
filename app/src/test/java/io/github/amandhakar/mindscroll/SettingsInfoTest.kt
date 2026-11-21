@@ -81,6 +81,9 @@ class SettingsInfoTest {
         assertEquals(TimerReveal.ALWAYS, settings.timerReveal)
         assertEquals(TimerReveal.EVERY_5_MIN, settings.counterTimerEvery)
         assertEquals(LeaveDelay.THREE_SECONDS, settings.leaveDelay)
+        assertEquals(false, settings.liquidIsland)
+        assertEquals(Settings.LiquidEvery.HOUR, settings.liquidEvery) // the liquid island comes out once an hour unless told otherwise
+        assertEquals(0L, settings.liquidLastAt)
     }
 
     @Test
@@ -91,5 +94,18 @@ class SettingsInfoTest {
         val again = Settings(context)
         assertEquals(TimerReveal.EVERY_10_MIN, again.counterTimerEvery)
         assertEquals(LeaveDelay.FIVE_SECONDS, again.leaveDelay)
+    }
+
+    @Test
+    fun theLiquidFrequencyIsSavedAndMeansWhatItSays() {
+        val settings = Settings(context)
+        settings.liquidEvery = Settings.LiquidEvery.QUARTER_HOUR
+        settings.liquidLastAt = 123_456L
+        val again = Settings(context)
+        assertEquals(Settings.LiquidEvery.QUARTER_HOUR, again.liquidEvery)
+        assertEquals(123_456L, again.liquidLastAt)
+        assertEquals(15 * 60_000L, Settings.LiquidEvery.QUARTER_HOUR.ms)
+        assertEquals(60 * 60_000L, Settings.LiquidEvery.HOUR.ms)
+        assertEquals(4 * 60 * 60_000L, Settings.LiquidEvery.FOUR_HOURS.ms)
     }
 }
