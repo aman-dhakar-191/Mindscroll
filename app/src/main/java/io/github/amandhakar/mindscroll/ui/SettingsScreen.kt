@@ -37,9 +37,6 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
     val settings = context.app.settings
     var character by remember { mutableStateOf(settings.mascotCharacter) }
     var palette by remember { mutableStateOf(settings.mascotPalette) }
-    var infoMode by remember { mutableStateOf(settings.infoMode) }
-    var autoScroll by remember { mutableStateOf(settings.autoScroll) }
-    var timerReveal by remember { mutableStateOf(settings.timerReveal) }
     var cameraPatch by remember { mutableStateOf(settings.cameraPatch) }
     var bubble by remember { mutableStateOf(settings.bubble) }
     var mascotSize by remember { mutableStateOf(settings.mascotSize) }
@@ -87,52 +84,8 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                 }
             }
 
-            SectionHeader("Overlay display")
-            Panel {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Camera island information", style = MaterialTheme.typography.bodyLarge)
-                    InfoChoice("Session timer only", infoMode == Settings.InfoMode.TIMER) {
-                        infoMode = Settings.InfoMode.TIMER
-                        settings.infoMode = infoMode
-                    }
-                    InfoChoice("Reel counter only", infoMode == Settings.InfoMode.COUNTER) {
-                        infoMode = Settings.InfoMode.COUNTER
-                        settings.infoMode = infoMode
-                    }
-                    InfoChoice("Timer and counter", infoMode == Settings.InfoMode.BOTH) {
-                        infoMode = Settings.InfoMode.BOTH
-                        settings.infoMode = infoMode
-                    }
-                    InfoChoice("Hide both", infoMode == Settings.InfoMode.HIDDEN) {
-                        infoMode = Settings.InfoMode.HIDDEN
-                        settings.infoMode = infoMode
-                    }
-                    if (infoMode == Settings.InfoMode.TIMER || infoMode == Settings.InfoMode.BOTH) {
-                        Text("Show the timer", style = MaterialTheme.typography.bodyLarge)
-                        InfoChoice("Always", timerReveal == Settings.TimerReveal.ALWAYS) {
-                            timerReveal = Settings.TimerReveal.ALWAYS
-                            settings.timerReveal = timerReveal
-                        }
-                        InfoChoice("For a few seconds every 5 minutes", timerReveal == Settings.TimerReveal.EVERY_5_MIN) {
-                            timerReveal = Settings.TimerReveal.EVERY_5_MIN
-                            settings.timerReveal = timerReveal
-                        }
-                        InfoChoice("For a few seconds every 10 minutes", timerReveal == Settings.TimerReveal.EVERY_10_MIN) {
-                            timerReveal = Settings.TimerReveal.EVERY_10_MIN
-                            settings.timerReveal = timerReveal
-                        }
-                    }
-                    PreferenceSwitch(
-                        title = "Auto-scroll between timer and counter",
-                        subtitle = "When enabled, the island alternates between both values.",
-                        checked = autoScroll,
-                        enabled = infoMode == Settings.InfoMode.BOTH,
-                    ) {
-                        autoScroll = it
-                        settings.autoScroll = it
-                    }
-                }
-            }
+            SectionHeader("Camera island")
+            IslandSettings(settings, onOpenApps)
 
             SectionHeader("Where Mo appears")
             Panel {

@@ -69,6 +69,28 @@ class AppSessionsTest {
         assertNull(s.current)
     }
 
+    @Test
+    fun theLeaveDelayIsTheUsersChoice() {
+        val s = sessions()
+        s.setLeaveDelay(5_000)
+        s.onAppEvent(ig, 0)
+        s.onCheck(launcher, interactive = true, now = 4_000)
+        assertEquals(ig, s.current?.packageName) // not yet: 5 seconds were chosen
+        s.onCheck(launcher, interactive = true, now = 5_000)
+        assertNull(s.current)
+    }
+
+    @Test
+    fun anUnknownFrontAppWaitsTwiceTheLeaveDelayNotHalfAMinute() {
+        val s = sessions()
+        s.setLeaveDelay(3_000)
+        s.onAppEvent(ig, 0)
+        s.onCheck(null, interactive = true, now = 5_000)
+        assertEquals(ig, s.current?.packageName) // a brief gap mid-use must not split the session
+        s.onCheck(null, interactive = true, now = 6_000)
+        assertNull(s.current)
+    }
+
     // --- Timer resumes from today's time ---
 
     @Test

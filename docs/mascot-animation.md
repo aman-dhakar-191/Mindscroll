@@ -129,3 +129,20 @@ sets (Classic, Peach, Berry, Ocean, Mono). The user picks both in Settings, or i
   Chill mood in Classic colours; a launcher icon can't change colour.
 - The camera island hugs the camera hole with a thin rim and never starts closer than 3dp to the
   top of the screen (`CounterOverlay.patchHeight`, `patchTop`).
+
+## What the camera island shows (`IslandInfo`)
+
+Each tracked app chooses what the island's information slot shows (Apps to track → "Island shows"):
+Timer, Counter, Both or Nothing. The rules are in `IslandInfo` and are unit tested:
+
+- An app that doesn't count reels never shows the counter: Counter and Both fall back to Timer.
+- **Both** keeps the counter up and brings the session timer in its place for 5 seconds every 5 or
+  10 minutes (Settings → Camera island). **Timer** is always on, or comes and goes on the same
+  rhythm. Changes fade; nothing scrolls.
+- Apps with no choice of their own get the default for their kind (reel apps: Both; others: Timer),
+  seeded from the old single setting so nobody's island changes on update.
+- Both sides of the camera get the same width, so the hole stays in the middle of the island.
+- After leaving an app the island hides after 3 or 5 seconds (`Settings.LeaveDelay`); when the
+  phone can't say what is in front at all it waits twice as long (it used to wait 30 s).
+- The detection log says what the island shows and why (`overlay shows ...`) and where the camera
+  and island are (`overlay: camera=...`).

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.amandhakar.mindscroll.app
+import io.github.amandhakar.mindscroll.data.Settings.AppInfo
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,8 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
     // Read so the rows recompose when the reel choice changes; TrackedApps.countsReels answers per app.
     val reelChoice by TrackedApps.reelPackages.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    // What the island shows in each app; re-read after each choice.
+    var infoChoices by remember { mutableStateOf(settings.infoChoices()) }
     // Tracked apps first when the screen opens; they don't jump around while toggling.
     val initiallyTracked = remember { tracked }
     val installed by produceState<List<InstalledApp>?>(null) {
@@ -79,8 +82,9 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
                 TextButton(onClick = onBack) { Text("Done") }
             }
             Text(
-                "Tracked apps get screen time, the live timer and Mo's remarks. Reels are counted only " +
-                    "in apps set to count reels: Instagram and YouTube (including RVX) until you choose.",
+                "Tracked apps get screen time, the live timer and Mo's remarks. For each one, choose what the " +
+                    "island by the camera shows. Reels are counted only in apps set to count reels: Instagram and " +
+                    "YouTube (including RVX) until you choose.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -112,6 +116,11 @@ fun TrackedAppsScreen(onBack: () -> Unit) {
                             tracked = installedApp.packageName in tracked,
                             hasReelHints = installedApp.packageName in ReelApps.known,
                             countsReels = reelChoice.let { TrackedApps.countsReels(installedApp.packageName) },
+                            info = infoChoices.choiceFor(installedApp.packageName, reelChoice.let { TrackedApps.countsReels(installedApp.packageName) }),
+                            onInfo = { choice ->
+                                settings.setAppInfo(installedApp.packageName, choice)
+                                infoChoices = settings.infoChoices()
+                            },
                             onToggleReels = { on ->
                                 // Save the full choice, so apps still on the default keep what they show.
                                 val current = settings.trackedApps.filter(TrackedApps::countsReels).toSet()
@@ -136,6 +145,8 @@ private fun AppRow(
     tracked: Boolean,
     hasReelHints: Boolean,
     countsReels: Boolean,
+    info: AppInfo,
+    onInfo: (AppInfo) -> Unit,
     onToggleReels: (Boolean) -> Unit,
     onToggle: (Boolean) -> Unit,
 ) {
@@ -143,36 +154,45 @@ private fun AppRow(
     val icon by produceState<ImageBitmap?>(null, app.packageName) {
         value = withContext(Dispatchers.IO) { appIcon(context, app.packageName) }
     }
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(40.dp)) {
-            icon?.let { Image(it, contentDescription = null, modifier = Modifier.size(40.dp)) }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(app.label, style = MaterialTheme.typography.bodyLarge)
-            if (tracked) {
-                // Timer and screen time are for every tracked app; the reel counter is a choice.
-                TextButton(
-                    onClick = { onToggleReels(!countsReels) },
-                    contentPadding = PaddingValues(0.dp),
-                ) {
-                    Text(
-                        if (countsReels) "Counting reels · tap for timer only" else "Timer only · tap to count reels",
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                }
-            } else if (hasReelHints) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp)) {
+                icon?.let { Image(it, contentDescription = null, modifier = Modifier.size(40.dp)) }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(app.label, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Reel feed known",
+                    when {
+                        !tracked && hasReelHints -> "Reel feed known"
+                        !tracked -> ""
+                        countsReels -> "Counts reels"
+                        else -> "Timer and screen time"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Switch(checked = tracked, onCheckedChange = onToggle)
         }
-        Switch(checked = tracked, onCheckedChange = onToggle)
+        if (tracked) {
+            // What the island next to the camera shows while this app is open.
+            Column(Modifier.padding(start = 52.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Island shows", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                InfoSegments(selected = info, countsReels = countsReels, onChoose = onInfo)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Count reels", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (countsReels) "Reels add to today's total and Mo's mood." else "Off: no reel counter here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = countsReels, onCheckedChange = onToggleReels)
+                }
+            }
+        }
     }
 }
 

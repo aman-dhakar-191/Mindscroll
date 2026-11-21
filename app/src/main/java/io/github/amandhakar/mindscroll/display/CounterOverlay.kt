@@ -22,6 +22,7 @@ import android.view.Surface
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import android.view.animation.AlphaAnimation
 import android.view.animation.TranslateAnimation
 import android.view.animation.OvershootInterpolator
 import android.widget.Chronometer
@@ -127,7 +128,8 @@ class CounterOverlay(
         val grew = state != null && newState.total > (state?.total ?: 0)
         state = newState
         val displayChanged = display != newDisplay
-        val revealChanged = display.timerReveal != newDisplay.timerReveal
+        val revealChanged = display.timerReveal != newDisplay.timerReveal ||
+            display.counterTimerEvery != newDisplay.counterTimerEvery || display.info != newDisplay.info
         display = newDisplay
         if (revealChanged) {
             timerRevealed = false
@@ -135,7 +137,9 @@ class CounterOverlay(
         }
         if (displayChanged) {
             DetectionLog.add(
-                "display: style=${newDisplay.motionStyle.name.lowercase()}, info=${newDisplay.infoMode.name.lowercase()}, " +
+                "display: style=${newDisplay.motionStyle.name.lowercase()}, " +
+                    "info=${newDisplay.info.perApp.size} chosen (defaults: reel apps ${newDisplay.info.reelDefault.name.lowercase()}, " +
+                    "others ${newDisplay.info.otherDefault.name.lowercase()}), " +
                     "mascot=${newDisplay.mascotSize.name.lowercase()}, patch=${newDisplay.cameraPatch}, bubble=${newDisplay.bubble}",
             )
         }
@@ -403,11 +407,11 @@ class CounterOverlay(
             gravity = Gravity.CENTER
             addView(mo, LinearLayout.LayoutParams(patchMoSize, patchMoSize))
         }
+        // The counter and the timer share one slot. A change fades; nothing flips by itself or scrolls.
         val info = ViewFlipper(service).apply {
-            isAutoStart = true
-            flipInterval = INFO_FLIP_MS.toInt()
-            inAnimation = TranslateAnimation(0f, 0f, dp(18).toFloat(), 0f).apply { duration = 260 }
-            outAnimation = TranslateAnimation(0f, 0f, 0f, -dp(18).toFloat()).apply { duration = 220 }
+            isAutoStart = false
+            inAnimation = AlphaAnimation(0f, 1f).apply { duration = 220 }
+            outAnimation = AlphaAnimation(1f, 0f).apply { duration = 160 }
             addView(count, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             addView(timer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             displayedChild = 0
@@ -552,18 +556,15 @@ class CounterOverlay(
         val current = session
         if (current == null) {
             views.timer.stop()
-            views.timer.visibility = View.GONE
             bindInfoMode(views)
             views.root.contentDescription = "Mindscroll: today's reels. Tap for details."
             return
         }
         val app = ReelApps.forPackage(current.packageName, TrackedApps.label(current.packageName))
-        val mode = infoMode()
-        val timerNeeded = mode == Settings.InfoMode.TIMER ||
-            (mode == Settings.InfoMode.BOTH && display.autoScroll)
+        // Running whenever the timer is part of what this app shows; the flipper decides when it is seen.
+        val timerNeeded = IslandInfo.usesTimer(choice(), countsReelsHere())
         views.timer.base = current.timerBase
         views.timer.setTextColor(app.accent.toInt())
-        views.timer.visibility = if (timerNeeded) View.VISIBLE else View.GONE
         if (timerNeeded) views.timer.start() else views.timer.stop()
         bindInfoMode(views)
         views.root.contentDescription = if (reelContext()) {
@@ -580,24 +581,17 @@ class CounterOverlay(
      */
     private fun reelContext(): Boolean = session?.packageName?.let(TrackedApps::countsReels) ?: true
 
-    /**
-     * What the user chose to show, except that in an app that doesn't count reels a counter
-     * would sit at today's total for nothing, so the timer is shown instead.
-     */
-    private fun infoMode(): Settings.InfoMode {
-        val wanted = when {
-            display.infoMode == Settings.InfoMode.HIDDEN -> Settings.InfoMode.HIDDEN
-            reelContext() -> display.infoMode
-            else -> Settings.InfoMode.TIMER
-        }
-        if (display.timerReveal == Settings.TimerReveal.ALWAYS || timerRevealed) return wanted
-        // The timer is between reveals: what is left is the counter, or nothing.
-        return when (wanted) {
-            Settings.InfoMode.TIMER -> Settings.InfoMode.HIDDEN
-            Settings.InfoMode.BOTH -> Settings.InfoMode.COUNTER
-            else -> wanted
-        }
-    }
+    /** The app the island is for: the one in front, or the one just left while Mo says goodbye. */
+    private fun infoPackage(): String? = session?.packageName ?: lastSessionPackage
+
+    private fun countsReelsHere(): Boolean = infoPackage()?.let(TrackedApps::countsReels) ?: true
+
+    /** What the user chose for this app, after the rule that an app without reels has no counter. */
+    private fun choice(): Settings.AppInfo = display.info.choiceFor(infoPackage(), countsReelsHere())
+
+    /** What fills the information slot right now (the rules are in [IslandInfo]). */
+    private fun content(): IslandContent =
+        IslandInfo.content(choice(), countsReelsHere(), display.timerReveal, timerRevealed)
 
     /** Brings the timer up or puts it away, resizing the island around it. */
     private fun setTimerRevealed(revealed: Boolean) {
@@ -608,13 +602,13 @@ class CounterOverlay(
         }
     }
 
-    /** Plans the next time the timer shows, from how long the session has run. Nothing for Always. */
+    /** Plans the next time the timer shows, from how long the session has run. Nothing when it doesn't come and go. */
     private fun scheduleTimerReveal() {
         handler.removeCallbacks(revealTimer)
         handler.removeCallbacks(hideTimer)
         val current = session ?: return
-        val wait = display.timerReveal.nextRevealInMs(SystemClock.elapsedRealtime() - current.timerBase) ?: return
-        handler.postDelayed(revealTimer, wait)
+        val every = IslandInfo.rhythmMs(choice(), countsReelsHere(), display.timerReveal, display.counterTimerEvery) ?: return
+        handler.postDelayed(revealTimer, IslandInfo.nextRevealInMs(every, SystemClock.elapsedRealtime() - current.timerBase))
     }
 
     /** The bubble's badge is a reel count, so it goes with the counter. */
@@ -638,38 +632,28 @@ class CounterOverlay(
     }
 
     /** Logs what the patch shows and why, when that changes, so a surprise can be explained afterwards. */
-    private fun logInfoDecision(mode: Settings.InfoMode) {
-        val line = "overlay shows ${mode.name.lowercase()}: chosen=${display.infoMode.name.lowercase()}, " +
-            "session=${session?.packageName ?: "none"}, reelApp=${session?.packageName?.let(TrackedApps::countsReels) ?: "n/a"}, " +
-            "exiting=$exitPending"
+    private fun logInfoDecision(content: IslandContent) {
+        val line = "overlay shows ${content.name.lowercase()}: app=${infoPackage() ?: "none"}, chosen=${choice().name.lowercase()}, " +
+            "countsReels=${countsReelsHere()}, timerUp=$timerRevealed, session=${session != null}, exiting=$exitPending"
         if (line == lastLoggedInfo) return
         lastLoggedInfo = line
         DetectionLog.add(line)
     }
 
     private fun bindInfoMode(views: PatchViews) {
-        logInfoDecision(infoMode())
-        when (infoMode()) {
-            Settings.InfoMode.TIMER -> {
+        val content = content()
+        logInfoDecision(content)
+        views.info.stopFlipping()
+        when (content) {
+            IslandContent.COUNTER -> {
+                views.info.visibility = View.VISIBLE
+                views.info.displayedChild = 0
+            }
+            IslandContent.TIMER -> {
                 views.info.visibility = if (session == null) View.GONE else View.VISIBLE
-                views.info.stopFlipping()
                 views.info.displayedChild = 1
             }
-            Settings.InfoMode.COUNTER -> {
-                views.info.visibility = View.VISIBLE
-                views.info.stopFlipping()
-                views.info.displayedChild = 0
-            }
-            Settings.InfoMode.BOTH -> {
-                views.info.visibility = View.VISIBLE
-                views.info.displayedChild = 0
-                if (display.autoScroll && session != null) views.info.startFlipping()
-                else views.info.stopFlipping()
-            }
-            Settings.InfoMode.HIDDEN -> {
-                views.info.stopFlipping()
-                views.info.visibility = View.GONE
-            }
+            IslandContent.NOTHING -> views.info.visibility = View.GONE
         }
     }
 
@@ -685,15 +669,21 @@ class CounterOverlay(
         val timerWidth = views.timer.paint.measureText("00:00").toInt() + dp(12)
         val countWidth = views.count.paint.measureText(views.count.text.toString()).toInt() + dp(12)
         val moWidth = moSize + dp(4)
-        val infoWidth = if (infoMode() == Settings.InfoMode.HIDDEN) 0 else when (infoMode()) {
-            Settings.InfoMode.TIMER -> if (session == null) 0 else timerWidth
-            Settings.InfoMode.COUNTER -> countWidth
-            Settings.InfoMode.BOTH -> maxOf(dp(58), timerWidth, countWidth)
-            Settings.InfoMode.HIDDEN -> 0
+        val content = content()
+        val infoWidth = when {
+            content == IslandContent.NOTHING -> 0
+            // Counter with the timer now and then: one width for both, so the island doesn't jump.
+            choice() == Settings.AppInfo.BOTH -> maxOf(timerWidth, countWidth)
+            content == IslandContent.TIMER -> if (session == null) 0 else timerWidth
+            else -> countWidth
         }
-        (views.left.layoutParams as LinearLayout.LayoutParams).width = moWidth
-        (views.info.layoutParams as LinearLayout.LayoutParams).width = infoWidth
-        val width = 2 * dp(PATCH_PADDING_DP) + moWidth + infoWidth + cameraGap(views.camera)
+        // Both sides of the camera get the same width, so the hole sits in the middle of the island
+        // whatever is on either side. With Mo on one side and a narrower (or no) timer on the other,
+        // the island used to be centred on the camera but the hole was off-centre inside it.
+        val side = maxOf(moWidth, infoWidth)
+        (views.left.layoutParams as LinearLayout.LayoutParams).width = side
+        (views.info.layoutParams as LinearLayout.LayoutParams).width = if (infoWidth == 0) 0 else side
+        val width = 2 * dp(PATCH_PADDING_DP) + 2 * side + cameraGap(views.camera)
         views.params.width = width
         // Mo's size can change while the island is up, and the island hugs whatever is tallest.
         val height = patchHeight(views.camera)
@@ -701,11 +691,25 @@ class CounterOverlay(
         views.params.y = patchTop(views.camera, height)
         (views.root.background as? GradientDrawable)?.cornerRadius = height / 2f
         views.params.x = maxOf(0, (views.camera?.centerX() ?: (screenWidth() / 2)) - width / 2)
+        logCameraPlacement(views, width)
         if (apply) {
             views.left.requestLayout()
             views.info.requestLayout()
             runCatching { windowManager.updateViewLayout(views.root, views.params) }
         }
+    }
+
+    private var lastLoggedPlacement: String? = null
+
+    /** Where the camera is and where the island went, once per change, to explain an island that looks off-centre. */
+    private fun logCameraPlacement(views: PatchViews, width: Int) {
+        val camera = views.camera
+        val line = "overlay: camera=${camera?.let { "x ${it.left}..${it.right}, y ${it.top}..${it.bottom}" } ?: "none"}, " +
+            "screen=${screenWidth()}, island x=${views.params.x} width=$width" +
+            (camera?.let { ", camera centre ${it.centerX()} vs island centre ${views.params.x + width / 2}" } ?: "")
+        if (line == lastLoggedPlacement) return
+        lastLoggedPlacement = line
+        DetectionLog.add(line)
     }
 
     private fun patchHeight(camera: Rect?): Int =
@@ -1059,7 +1063,7 @@ class CounterOverlay(
         const val PATCH_TOP_GAP_DP = 3
         const val INFO_FLIP_MS = 2_800L
         /** How long the timer stays up each time it shows, when it isn't always on. */
-        const val TIMER_REVEAL_MS = 8_000L
+        const val TIMER_REVEAL_MS = 5_000L
         const val SNOOZE_MS = 60 * 60_000L
         /** How long a speech bubble stays up: a base plus reading time. */
         const val SPEECH_MS = 3_000L

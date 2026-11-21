@@ -17,7 +17,35 @@ class Settings(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
-    enum class InfoMode { TIMER, COUNTER, BOTH, HIDDEN }
+    /**
+     * What the camera island shows in one app. [BOTH] keeps the reel counter up and shows the
+     * session timer now and then (see [TimerReveal]); there is no scrolling between them.
+     * Counter and Both need reel counting in that app, so without it they fall back to the timer.
+     */
+    enum class AppInfo { TIMER, COUNTER, BOTH, NOTHING }
+
+    /** How soon after leaving an app the island hides. */
+    enum class LeaveDelay(val ms: Long) { THREE_SECONDS(3_000L), FIVE_SECONDS(5_000L) }
+
+    /**
+     * What the island shows in each app: the user's own choice per app, or the default for apps
+     * they haven't chosen for. Pure data, so the rules are testable.
+     */
+    data class InfoChoices(
+        val perApp: Map<String, AppInfo> = emptyMap(),
+        /** For an app that counts reels and has no choice of its own. */
+        val reelDefault: AppInfo = AppInfo.BOTH,
+        /** For any other tracked app with no choice of its own. */
+        val otherDefault: AppInfo = AppInfo.TIMER,
+    ) {
+        /** What [packageName] shows, given whether it counts reels. Null package: the reel default. */
+        fun choiceFor(packageName: String?, countsReels: Boolean): AppInfo {
+            val chosen = packageName?.let { perApp[it] }
+                ?: if (countsReels || packageName == null) reelDefault else otherDefault
+            // A counter needs reels to count: an app that doesn't count them shows the timer instead.
+            return if (!countsReels && (chosen == AppInfo.COUNTER || chosen == AppInfo.BOTH)) AppInfo.TIMER else chosen
+        }
+    }
     enum class MascotSize { COMPACT, STANDARD, LARGE }
 
     /**
@@ -52,12 +80,15 @@ class Settings(context: Context) {
     data class Display(
         val cameraPatch: Boolean,
         val bubble: Boolean,
-        val infoMode: InfoMode,
-        val autoScroll: Boolean,
+        val info: InfoChoices,
         val mascotSize: MascotSize,
         val motionStyle: MotionStyle,
         val milestoneReactions: Boolean,
+        /** How often the timer shows in apps set to the timer only. */
         val timerReveal: TimerReveal = TimerReveal.ALWAYS,
+        /** How often the timer shows over the counter in apps set to Both. Never "always". */
+        val counterTimerEvery: TimerReveal = TimerReveal.EVERY_5_MIN,
+        val leaveDelay: LeaveDelay = LeaveDelay.THREE_SECONDS,
         val character: MoCharacter = MoCharacter.MO,
         val palette: MoPalette = MoPalette.CLASSIC,
     )
@@ -80,14 +111,53 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_BUBBLE, false)
         set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
 
-    var infoMode: InfoMode
-        get() = runCatching { InfoMode.valueOf(prefs.getString(KEY_INFO_MODE, InfoMode.BOTH.name)!!) }
-            .getOrDefault(InfoMode.BOTH)
-        set(value) = prefs.edit().putString(KEY_INFO_MODE, value.name).apply()
+    /**
+     * The old, single "what the island shows" setting. No longer written: it only supplies the
+     * defaults for apps the user hasn't chosen for yet, so nobody's island changes on update.
+     * Both with auto-scroll off used to mean the counter alone.
+     */
+    private fun legacyInfo(): AppInfo {
+        val stored = prefs.getString(KEY_INFO_MODE, "BOTH")
+        return when {
+            stored == "TIMER" -> AppInfo.TIMER
+            stored == "COUNTER" -> AppInfo.COUNTER
+            stored == "HIDDEN" -> AppInfo.NOTHING
+            !prefs.getBoolean(KEY_AUTO_SCROLL, true) -> AppInfo.COUNTER
+            else -> AppInfo.BOTH
+        }
+    }
 
-    var autoScroll: Boolean
-        get() = prefs.getBoolean(KEY_AUTO_SCROLL, true)
-        set(value) = prefs.edit().putBoolean(KEY_AUTO_SCROLL, value).apply()
+    /** What the island shows in each app (see [InfoChoices]). */
+    fun infoChoices(): InfoChoices {
+        val legacy = legacyInfo()
+        val perApp = (prefs.getStringSet(KEY_APP_INFO, null) ?: emptySet()).mapNotNull { entry ->
+            val at = entry.lastIndexOf('=')
+            if (at <= 0) return@mapNotNull null
+            val info = runCatching { AppInfo.valueOf(entry.substring(at + 1)) }.getOrNull() ?: return@mapNotNull null
+            entry.substring(0, at) to info
+        }.toMap()
+        return InfoChoices(
+            perApp = perApp,
+            reelDefault = legacy,
+            otherDefault = if (legacy == AppInfo.NOTHING) AppInfo.NOTHING else AppInfo.TIMER,
+        )
+    }
+
+    /** The user's choice of what the island shows in [packageName]. */
+    fun setAppInfo(packageName: String, info: AppInfo) {
+        val others = (prefs.getStringSet(KEY_APP_INFO, null) ?: emptySet()).filterNot { it.startsWith("$packageName=") }
+        prefs.edit().putStringSet(KEY_APP_INFO, (others + "$packageName=${info.name}").toSet()).apply()
+    }
+
+    var counterTimerEvery: TimerReveal
+        get() = runCatching { TimerReveal.valueOf(prefs.getString(KEY_COUNTER_TIMER_EVERY, TimerReveal.EVERY_5_MIN.name)!!) }
+            .getOrDefault(TimerReveal.EVERY_5_MIN).takeIf { it != TimerReveal.ALWAYS } ?: TimerReveal.EVERY_5_MIN
+        set(value) = prefs.edit().putString(KEY_COUNTER_TIMER_EVERY, value.name).apply()
+
+    var leaveDelay: LeaveDelay
+        get() = runCatching { LeaveDelay.valueOf(prefs.getString(KEY_LEAVE_DELAY, LeaveDelay.THREE_SECONDS.name)!!) }
+            .getOrDefault(LeaveDelay.THREE_SECONDS)
+        set(value) = prefs.edit().putString(KEY_LEAVE_DELAY, value.name).apply()
 
     var mascotSize: MascotSize
         get() = runCatching { MascotSize.valueOf(prefs.getString(KEY_MASCOT_SIZE, MascotSize.STANDARD.name)!!) }
@@ -167,13 +237,14 @@ class Settings(context: Context) {
     }.conflate()
 
     fun display() = Display(
-        cameraPatch, bubble, infoMode, autoScroll, mascotSize, motionStyle, milestoneReactions,
-        timerReveal, mascotCharacter, mascotPalette,
+        cameraPatch, bubble, infoChoices(), mascotSize, motionStyle, milestoneReactions,
+        timerReveal, counterTimerEvery, leaveDelay, mascotCharacter, mascotPalette,
     )
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
+            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_APP_INFO ||
+                key == KEY_COUNTER_TIMER_EVERY || key == KEY_LEAVE_DELAY || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
                 key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE || key == KEY_TIMER_REVEAL
             ) trySend(display())
         }
@@ -189,6 +260,9 @@ class Settings(context: Context) {
         const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
         const val KEY_INFO_MODE = "info_mode"
         const val KEY_AUTO_SCROLL = "auto_scroll"
+        const val KEY_APP_INFO = "app_info"
+        const val KEY_COUNTER_TIMER_EVERY = "counter_timer_every"
+        const val KEY_LEAVE_DELAY = "leave_delay"
         const val KEY_MASCOT_SIZE = "mascot_size"
         const val KEY_MOTION_STYLE = "motion_style"
         const val KEY_MILESTONE_REACTIONS = "milestone_reactions"
