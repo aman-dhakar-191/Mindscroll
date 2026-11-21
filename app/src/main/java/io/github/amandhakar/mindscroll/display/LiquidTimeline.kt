@@ -1,5 +1,6 @@
 package io.github.amandhakar.mindscroll.display
 
+import io.github.amandhakar.mindscroll.mascot.Mood
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -8,8 +9,9 @@ import kotlin.math.sin
  *
  * 1. Mo is pushed out of the island inside a drop of liquid ([position] overshoots and wobbles).
  * 2. The drop pops: it shrinks and is drawn back into the island, and Mo is out completely, free.
- * 3. Mo roams the whole screen along a random [RoamPath], shakes its body ([shake]) and says how it
- *    feels ([bubbleAlpha]). The path starts and ends at the spot Mo came out of.
+ * 3. Mo roams the whole screen along a random [RoamPath] and, in the middle, does [midMove] (shakes its
+ *    body, or yawns when it is sleepy) while saying how it feels ([bubbleAlpha]). The path starts and
+ *    ends at the spot Mo came out of.
  * 4. A new drop forms around Mo ([drop]), and Mo winds up and is pulled back in.
  *
  * Pure maths, so the shape of the motion is tested.
@@ -38,6 +40,12 @@ object LiquidTimeline {
             else -> 1f - anticipate((x - HOLD_END) / (1f - HOLD_END), BACK_TENSION)
         }
     }
+
+    /** What Mo does in the middle of the roam. */
+    enum class MidMove { SHAKE, YAWN }
+
+    /** A sleepy Mo yawns (Mo's own big yawn and stretch); every other mood shakes its body. */
+    fun midMove(mood: Mood): MidMove = if (mood == Mood.SLEEPY) MidMove.YAWN else MidMove.SHAKE
 
     /** Whether Mo is out of the island at [t], in a drop or free. */
     fun isOut(t: Float): Boolean = t >= OUT_END && t < HOLD_END

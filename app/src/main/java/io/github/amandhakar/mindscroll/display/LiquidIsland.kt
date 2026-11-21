@@ -171,6 +171,7 @@ class LiquidIsland(
         var waved = false
         var glancedAt = 0
         var shook = false
+        val move = LiquidTimeline.midMove(mood)
         var lastX = outX
         var lean = 0f
 
@@ -206,7 +207,7 @@ class LiquidIsland(
                 lean += ((x - lastX) * 0.6f - lean) * 0.2f
                 lastX = x
                 // A shake of the whole body, from side to side, in the middle of the roam.
-                val shake = LiquidTimeline.shake(t)
+                val shake = if (move == LiquidTimeline.MidMove.SHAKE) LiquidTimeline.shake(t) else 0f
                 mo.rotation = lean.coerceIn(-12f, 12f) + 14f * shake
                 mo.translationX += dp(2) * shake
                 // What Mo says, beside it, following it, fading in and out; above it near the bottom of the screen.
@@ -225,16 +226,16 @@ class LiquidIsland(
                 // The drop pops: Mo is out completely, and pleased about it.
                 if (!waved && LiquidTimeline.isFree(t)) {
                     waved = true
-                    mo.react(intensity = 0.9f, excited = true)
+                    mo.react(intensity = 0.9f, excited = move != LiquidTimeline.MidMove.YAWN)
                 }
-                // A look around, a happy shake in the middle, another look around.
+                // A look around, a happy shake (or a big yawn, when sleepy) in the middle, another look around.
                 if (glancedAt == 0 && u >= 0.22f) {
                     glancedAt = 1
                     mo.glance()
                 }
                 if (!shook && u >= 0.40f) {
                     shook = true
-                    mo.react(intensity = 0.6f, excited = true)
+                    if (move == LiquidTimeline.MidMove.YAWN) mo.stretch() else mo.react(intensity = 0.6f, excited = true)
                 }
                 if (glancedAt == 1 && u >= 0.72f) {
                     glancedAt = 2

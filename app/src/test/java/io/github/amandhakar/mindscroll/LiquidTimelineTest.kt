@@ -138,4 +138,12 @@ class LiquidTimelineTest {
         assertTrue(form.all { it.attach == 1f })
         assertEquals(1f, LiquidTimeline.drop(1f).scale, eps)
     }
+
+    @Test
+    fun aSleepyMoYawnsAndEveryOtherMoodShakes() {
+        assertEquals(LiquidTimeline.MidMove.YAWN, LiquidTimeline.midMove(io.github.amandhakar.mindscroll.mascot.Mood.SLEEPY))
+        for (mood in io.github.amandhakar.mindscroll.mascot.Mood.entries.filter { it != io.github.amandhakar.mindscroll.mascot.Mood.SLEEPY }) {
+            assertEquals("$mood", LiquidTimeline.MidMove.SHAKE, LiquidTimeline.midMove(mood))
+        }
+    }
 }
