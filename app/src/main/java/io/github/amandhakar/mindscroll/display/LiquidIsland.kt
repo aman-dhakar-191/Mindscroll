@@ -71,14 +71,15 @@ class LiquidIsland(
         val radius = moSize / 2f + dp(2)
         val pillH = pill.height().toFloat()
         val cyIn = pillH / 2f
-        val cyOut = pillH + dp(12)
+        // Far enough out that the blob hangs just clear of the island, joined by a thin neck.
+        val cyOut = pillH + radius + dp(3)
         val winW = pill.width() + 2 * margin
         val winH = (cyOut + radius + dp(24)).toInt()
         val originX = pill.left - margin
         val cx = moCenterX - originX
 
         val strip = RectF(
-            margin + pillH / 2f, pillH - dp(8), margin + pill.width() - pillH / 2f, pillH,
+            margin + pillH / 2f, pillH - dp(12), margin + pill.width() - pillH / 2f, pillH,
         )
         val goo = GooView(context).also { it.setGeometry(strip, cx, cyIn, radius) }
         val mo = MoView(context).apply {
@@ -213,7 +214,7 @@ class LiquidIsland(
         }
 
         private companion object {
-            const val BLUR_PX = 6f
+            const val BLUR_PX = 7.5f
         }
     }
 }
