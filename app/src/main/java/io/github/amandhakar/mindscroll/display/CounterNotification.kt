@@ -19,6 +19,7 @@ import android.provider.Settings
 import io.github.amandhakar.mindscroll.R
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoPainter
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
@@ -64,7 +65,7 @@ object CounterNotification {
             .setContentTitle("${state.total} ${tracker.title.lowercase()} today · ${Mo.NAME} is ${if (state.asleep) "asleep" else state.mood.title.lowercase()}")
             .setContentText(line)
             .setStyle(Notification.BigTextStyle().bigText(if (breakdown.isEmpty()) line else "$line\n$breakdown"))
-            .setColor(state.mood.color.toInt())
+            .setColor(MoLook.color(state.mood))
             .setContentIntent(openApp(context))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -76,10 +77,10 @@ object CounterNotification {
         context.getSystemService(NotificationManager::class.java).cancel(ID_OFF)
     }
 
-    private var moIconCache: Pair<Pair<Mood, Boolean>, Icon>? = null
+    private var moIconCache: Pair<List<Any>, Icon>? = null
 
     private fun moIcon(context: Context, state: CounterState): Icon {
-        val key = state.mood to state.asleep
+        val key = listOf(state.mood, state.asleep, MoLook.character, MoLook.palette)
         moIconCache?.let { (cachedKey, icon) -> if (cachedKey == key) return icon }
         val size = (64 * context.resources.displayMetrics.density).toInt()
         return Icon.createWithBitmap(MoPainter.bitmap(size, state.mood, state.asleep)).also { moIconCache = key to it }

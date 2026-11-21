@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
                 var showApps by remember { mutableStateOf(false) }
                 var showMemories by remember { mutableStateOf(false) }
                 var showSettings by remember { mutableStateOf(false) }
+                var tour by remember { mutableStateOf(false) }
 
                 // Permissions are granted in system screens; re-read them on the way back.
                 LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -57,9 +58,10 @@ class MainActivity : ComponentActivity() {
                     OnboardingScreen(
                         permissions = permissions,
                         onPermissionsChanged = { permissions = PermissionState.read(context) },
-                        onDone = {
+                        onDone = { startTour ->
                             settings.onboardingDone = true
                             onboarding = false
+                            tour = startTour
                         },
                     )
                 } else {
@@ -68,6 +70,8 @@ class MainActivity : ComponentActivity() {
                         onOpenSetup = { onboarding = true },
                         onOpenLog = { showLog = true },
                         onOpenSettings = { showSettings = true },
+                        tour = tour,
+                        onTourDone = { tour = false },
                     )
                 }
             }

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.widget.RemoteViews
 import io.github.amandhakar.mindscroll.R
 import io.github.amandhakar.mindscroll.app
+import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoPainter
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import io.github.amandhakar.mindscroll.ui.MainActivity
@@ -39,7 +40,7 @@ class CounterWidget : AppWidgetProvider() {
                 setImageViewBitmap(R.id.widget_mo, MoPainter.bitmap(moSize, mood, state.asleep))
                 setTextViewText(R.id.widget_count, total.toString())
                 setTextViewText(R.id.widget_label, "${TrackerRegistry.primary.title.lowercase()} today")
-                setTextColor(R.id.widget_label, mood.color.toInt())
+                setTextColor(R.id.widget_label, MoLook.color(mood))
                 setTextViewText(R.id.widget_line, state.line())
                 setOnClickPendingIntent(
                     R.id.widget_root,

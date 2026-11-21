@@ -2,6 +2,9 @@ package io.github.amandhakar.mindscroll.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.amandhakar.mindscroll.mascot.MoCharacter
+import io.github.amandhakar.mindscroll.mascot.MoLook
+import io.github.amandhakar.mindscroll.mascot.MoPalette
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
 import kotlinx.coroutines.channels.awaitClose
@@ -36,7 +39,15 @@ class Settings(context: Context) {
         val mascotSize: MascotSize,
         val motionStyle: MotionStyle,
         val milestoneReactions: Boolean,
+        val character: MoCharacter = MoCharacter.MO,
+        val palette: MoPalette = MoPalette.CLASSIC,
     )
+
+    init {
+        // Whatever draws Mo reads the look from MoLook; keep it in step with what was saved.
+        MoLook.character = mascotCharacter
+        MoLook.palette = mascotPalette
+    }
 
     var onboardingDone: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_DONE, false)
@@ -68,6 +79,24 @@ class Settings(context: Context) {
         get() = runCatching { MotionStyle.valueOf(prefs.getString(KEY_MOTION_STYLE, MotionStyle.BALANCED.name)!!) }
             .getOrDefault(MotionStyle.BALANCED)
         set(value) = prefs.edit().putString(KEY_MOTION_STYLE, value.name).apply()
+
+    /** Who lives in the camera notch (and is the app's logo). Mo until the user picks. */
+    var mascotCharacter: MoCharacter
+        get() = runCatching { MoCharacter.valueOf(prefs.getString(KEY_MASCOT_CHARACTER, MoCharacter.MO.name)!!) }
+            .getOrDefault(MoCharacter.MO)
+        set(value) {
+            prefs.edit().putString(KEY_MASCOT_CHARACTER, value.name).apply()
+            MoLook.character = value
+        }
+
+    /** The set of body colours for the moods. Classic until the user picks. */
+    var mascotPalette: MoPalette
+        get() = runCatching { MoPalette.valueOf(prefs.getString(KEY_MASCOT_PALETTE, MoPalette.CLASSIC.name)!!) }
+            .getOrDefault(MoPalette.CLASSIC)
+        set(value) {
+            prefs.edit().putString(KEY_MASCOT_PALETTE, value.name).apply()
+            MoLook.palette = value
+        }
 
     var milestoneReactions: Boolean
         get() = prefs.getBoolean(KEY_MILESTONE_REACTIONS, true)
@@ -113,11 +142,16 @@ class Settings(context: Context) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }.conflate()
 
-    fun display() = Display(cameraPatch, bubble, infoMode, autoScroll, mascotSize, motionStyle, milestoneReactions)
+    fun display() = Display(
+        cameraPatch, bubble, infoMode, autoScroll, mascotSize, motionStyle, milestoneReactions,
+        mascotCharacter, mascotPalette,
+    )
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS) trySend(display())
+            if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
+                key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE
+            ) trySend(display())
         }
         trySend(display())
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -134,6 +168,8 @@ class Settings(context: Context) {
         const val KEY_MASCOT_SIZE = "mascot_size"
         const val KEY_MOTION_STYLE = "motion_style"
         const val KEY_MILESTONE_REACTIONS = "milestone_reactions"
+        const val KEY_MASCOT_CHARACTER = "mascot_character"
+        const val KEY_MASCOT_PALETTE = "mascot_palette"
         const val KEY_BUBBLE_X = "bubble_x"
         const val KEY_BUBBLE_Y = "bubble_y"
         const val KEY_TRACKED_APPS = "tracked_apps"

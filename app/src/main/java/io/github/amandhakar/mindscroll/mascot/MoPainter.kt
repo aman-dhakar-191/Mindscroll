@@ -28,8 +28,6 @@ object MoPainter {
      */
     const val ANIMATED_STAGE = 0.9f
 
-    /** Highest point of the curl at rest, as a fraction of the square (stroke included; measured). */
-    private const val CURL_TOP = 0.0375f
     private val INK = 0xFF1B1B2F.toInt()
     private val colorEvaluator = android.animation.ArgbEvaluator()
 
@@ -51,13 +49,15 @@ object MoPainter {
         left: Float = 0f,
         top: Float = 0f,
         pose: MoPose = MoPose(),
-        previousMoodColor: Int = mood.color.toInt(),
+        previousMoodColor: Int = MoLook.color(mood),
         stage: Float = 1f,
+        character: MoCharacter = MoLook.character,
+        palette: MoPalette = MoLook.palette,
     ) {
         val s = size
         val body = if (pose.moodTransition < 1f) {
-            colorEvaluator.evaluate(pose.moodTransition, previousMoodColor, mood.color.toInt()) as Int
-        } else mood.color.toInt()
+            colorEvaluator.evaluate(pose.moodTransition, previousMoodColor, palette.color(mood)) as Int
+        } else palette.color(mood)
         val wave = sin(pose.phase * 2 * PI).toFloat()
         val asleep = pose.sleep > 0.5f
         val yawning = !asleep && pose.yawn > 0.25f
@@ -132,7 +132,7 @@ object MoPainter {
             // Capped so no style or intensity can stretch Mo past the headroom the stage leaves.
             val r = pose.react.coerceIn(-0.6f, 1.25f)
             val sy = 1 + 0.08f * r
-            val curlTop = CURL_TOP - 0.02f * r.coerceIn(0f, 1f)
+            val curlTop = character.top - 0.02f * r.coerceIn(0f, 1f)
             // The hop is whatever headroom the stretch leaves, so the curl can never leave the view.
             val headroom = ((pivotY - s * 0.012f) / stage - (pivotY - s * curlTop) * sy)
             val hop = minOf(s * 0.03f * pose.hop * r.coerceAtLeast(0f), headroom.coerceAtLeast(0f))
@@ -145,27 +145,29 @@ object MoPainter {
             canvas.scale(1f + 0.018f * settle, 1f - 0.018f * settle, pivotX, pivotY)
         }
 
-        // The curl on top: a little scroll, as in "scroll". It perks up on surprise.
-        stroke.color = body
-        stroke.strokeWidth = s * 0.07f
-        path.rewind()
-        path.moveTo(s * 0.5f, s * 0.2f)
-        val curlLift = s * 0.02f * pose.react.coerceIn(0f, 1f)
-        path.cubicTo(s * 0.5f, s * 0.06f - curlLift, s * 0.66f, s * 0.04f - curlLift, s * 0.68f, s * 0.12f - curlLift)
-        canvas.drawPath(path, stroke)
+        // What is behind the body: Mo's curl (a little scroll, as in "scroll"), or a cat's ears, a
+        // bunny's, a sprout's leaves. It perks up on surprise.
+        val lift = s * 0.02f * pose.react.coerceIn(0f, 1f)
+        if (character == MoCharacter.MO) {
+            stroke.color = body
+            stroke.strokeWidth = s * 0.07f
+            path.rewind()
+            path.moveTo(s * 0.5f, s * 0.2f)
+            path.cubicTo(s * 0.5f, s * 0.06f - lift, s * 0.66f, s * 0.04f - lift, s * 0.68f, s * 0.12f - lift)
+            canvas.drawPath(path, stroke)
+        } else {
+            MoBodies.drawBack(canvas, s, body, character, lift)
+        }
 
-        // Body: a soft, slightly squat blob, with a shine.
-        fill.color = body
-        rect.set(s * 0.08f, s * 0.16f, s * 0.92f, s * 0.94f)
-        canvas.drawRoundRect(rect, s * 0.38f, s * 0.36f, fill)
-        fill.color = Color.argb(70, 255, 255, 255)
-        rect.set(s * 0.2f, s * 0.24f, s * 0.42f, s * 0.36f)
-        canvas.drawOval(rect, fill)
+        // Body: a soft, slightly squat blob (or a cat, a cloud, a ghost...), with a shine.
+        MoBodies.drawBody(canvas, s, body, character)
+        MoBodies.drawFront(canvas, s, character)
 
         stroke.color = INK
         stroke.strokeWidth = s * 0.055f
         fill.color = INK
-        val eyeY = s * 0.52f
+        val faceDrop = s * character.faceDrop
+        val eyeY = s * 0.52f + faceDrop
         eyeX[0] = s * 0.35f
         eyeX[1] = s * 0.65f
         // Eyes open a little wider while Mo is paying attention.
@@ -173,8 +175,8 @@ object MoPainter {
 
         if (!asleep && !sideEyeing && (mood == Mood.CHILL || mood == Mood.CURIOUS || surprised || excited || farewell)) {
             fill.color = Color.argb(if (excited) 130 else 90, 255, 110, 140)
-            rect.set(s * 0.15f, s * 0.6f, s * 0.29f, s * 0.69f); canvas.drawOval(rect, fill)
-            rect.set(s * 0.71f, s * 0.6f, s * 0.85f, s * 0.69f); canvas.drawOval(rect, fill)
+            rect.set(s * 0.15f, s * 0.6f + faceDrop, s * 0.29f, s * 0.69f + faceDrop); canvas.drawOval(rect, fill)
+            rect.set(s * 0.71f, s * 0.6f + faceDrop, s * 0.85f, s * 0.69f + faceDrop); canvas.drawOval(rect, fill)
             fill.color = INK
         }
 
@@ -233,7 +235,7 @@ object MoPainter {
 
         if (!asleep && !yawning) brows(canvas, s, eyeY, pose, mood, wave)
 
-        val mouthY = s * 0.72f
+        val mouthY = s * 0.72f + faceDrop
         if (asleep) {
             // A small, slightly open sleeping mouth.
             rect.set(s * 0.46f, mouthY - s * 0.02f, s * 0.54f, mouthY + s * 0.04f)
@@ -297,9 +299,21 @@ object MoPainter {
     }
 
     /** A still Mo, for the widget and notification (they can't animate). */
-    fun bitmap(sizePx: Int, mood: Mood, asleep: Boolean = false): Bitmap {
+    fun bitmap(
+        sizePx: Int,
+        mood: Mood,
+        asleep: Boolean = false,
+        character: MoCharacter = MoLook.character,
+        palette: MoPalette = MoLook.palette,
+    ): Bitmap {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-        draw(Canvas(bitmap), sizePx.toFloat(), mood, pose = MoPose(sleep = if (asleep) 1f else 0f))
+        // The others have ears or leaves right up to the top edge; Mo's curl leaves room at full size.
+        val stage = if (character == MoCharacter.MO) 1f else 0.94f
+        draw(
+            Canvas(bitmap), sizePx.toFloat(), mood,
+            pose = MoPose(sleep = if (asleep) 1f else 0f),
+            previousMoodColor = palette.color(mood), stage = stage, character = character, palette = palette,
+        )
         return bitmap
     }
 
@@ -554,7 +568,7 @@ class MoView @JvmOverloads constructor(
     var mood: Mood = Mood.CHILL
         set(value) {
             if (field != value) {
-                previousMoodColor = field.color.toInt()
+                previousMoodColor = MoLook.color(field)
                 field = value
                 moodChangedAt = SystemClock.uptimeMillis()
                 invalidate()
@@ -613,7 +627,7 @@ class MoView @JvmOverloads constructor(
     private var glanceStart: Long? = null
     private var glanceCarry: Float = 0f
     private var reactionIntensity: Float = 1f
-    private var previousMoodColor: Int = mood.color.toInt()
+    private var previousMoodColor: Int = MoLook.color(mood)
     /** The system's animation scale is 0 ("remove animations"): keep Mo still apart from short, soft reactions. */
     private var reducedMotion = false
 
