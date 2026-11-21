@@ -71,7 +71,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                         palette = palette,
                         onCharacter = {
                             character = it
-                            settings.chooseCharacter(context, it)
+                            settings.chooseCharacter(it)
                         },
                         onPalette = {
                             palette = it
@@ -79,7 +79,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                         },
                     )
                     Text(
-                        "The app icon changes to match. Your launcher may take a few seconds to show it.",
+                        "The app icon changes to match your character and colour when you leave the app. Your launcher may take a few seconds to show it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

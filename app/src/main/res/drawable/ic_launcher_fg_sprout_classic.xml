@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated: the sprout launcher icon, chill mood in the classic colours, on the same grid as the in-app character. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="21" android:translateY="23" android:scaleX="0.66" android:scaleY="0.66">
+        <path android:strokeColor="#FF49A983" android:strokeWidth="5" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M50,22C50,14 50,10 50,6"/>
+        <path android:fillColor="#FF44BE71" android:pathData="M50,8C44,-1 30,-1 24,6C32,14 44,14 50,8Z"/>
+        <path android:fillColor="#FF44BE71" android:pathData="M50,8C56,-1 70,-1 76,6C68,14 56,14 50,8Z"/>
+        <path android:fillColor="#FF5EE6A8" android:pathData="M46,18H54A38,35 0 0 1 92,53V59A38,35 0 0 1 54,94H46A38,35 0 0 1 8,59V53A38,35 0 0 1 46,18Z"/>
+        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.28" android:pathData="M20,30A11,6 0 1 0 42,30A11,6 0 1 0 20,30Z"/>
+        <path android:fillColor="#FFFF6E8C" android:fillAlpha="0.38" android:pathData="M15,65A7,4.5 0 1 0 29,65A7,4.5 0 1 0 15,65Z"/>
+        <path android:fillColor="#FFFF6E8C" android:fillAlpha="0.38" android:pathData="M71,65A7,4.5 0 1 0 85,65A7,4.5 0 1 0 71,65Z"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M28,55Q35,43 42,55"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M58,55Q65,43 72,55"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M38,70Q50,82 62,70"/>
+    </group>
+</vector>
