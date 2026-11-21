@@ -36,6 +36,7 @@ import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.mascot.Mo
 import io.github.amandhakar.mindscroll.mascot.MoPolicy
+import kotlin.random.Random
 import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
@@ -86,7 +87,8 @@ class CounterOverlay(
     /** Experimental: Mo comes out of the island and goes back in (see [LiquidIsland]). Made when first needed. */
     private var liquid: LiquidIsland? = null
     private var lastLiquidAtMs = 0L
-    private val liquidHello = Runnable { liquidEmerge("app opened", minGapMs = 20_000L) }
+    /** Brings Mo out when it is due (see [scheduleLiquid]). */
+    private val liquidTick = Runnable { liquidEmerge("it has been a while", minGapMs = 0L) }
     private var bubble: BubbleViews? = null
     private var panel: PanelViews? = null
     private var panelClosedAt = 0L
@@ -137,7 +139,9 @@ class CounterOverlay(
         val displayChanged = display != newDisplay
         val revealChanged = display.timerReveal != newDisplay.timerReveal ||
             display.counterTimerEvery != newDisplay.counterTimerEvery || display.info != newDisplay.info
+        val liquidChanged = display.liquidIsland != newDisplay.liquidIsland || display.liquidEvery != newDisplay.liquidEvery
         display = newDisplay
+        if (liquidChanged) scheduleLiquid()
         if (revealChanged) {
             timerRevealed = false
             scheduleTimerReveal()
@@ -372,7 +376,7 @@ class CounterOverlay(
 
     fun removeAll() {
         handler.removeCallbacks(endSnooze)
-        handler.removeCallbacks(liquidHello)
+        handler.removeCallbacks(liquidTick)
         liquid?.cancel()
         handler.removeCallbacks(revealTimer)
         handler.removeCallbacks(hideTimer)
@@ -500,9 +504,8 @@ class CounterOverlay(
         // A new session (or a new timer base) starts its own 5- or 10-minute rhythm.
         timerRevealed = false
         scheduleTimerReveal()
-        // Experimental: a moment after an app opens, Mo comes out to say hello.
-        handler.removeCallbacks(liquidHello)
-        if (newSession != null && newSession.packageName != previousPackage) handler.postDelayed(liquidHello, 1_400L)
+        // Experimental: Mo comes out when it is due, counted from the last time (at most once an hour by default).
+        if (newSession == null || newSession.packageName != previousPackage) scheduleLiquid()
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
             if (reaction == SessionReaction.APP_EXIT) {
@@ -753,7 +756,7 @@ class CounterOverlay(
     /** Takes the patch off screen, fading it out unless [animate] is false (shutting down). */
     private fun removePatch(animate: Boolean = true) {
         val views = patch ?: return
-        handler.removeCallbacks(liquidHello)
+        handler.removeCallbacks(liquidTick)
         liquid?.cancel()
         patch = null
         views.timer.stop()
@@ -984,34 +987,62 @@ class CounterOverlay(
     }
 
     /**
-     * What Mo asks while it is out, or null when Mo keeps quiet: unprompted remarks switched off, quiet
-     * hours, or snoozed. Mo's voice: short, warm, first person.
+     * What Mo says while it is out: how Mo feels, in Mo's voice. Null when Mo keeps quiet: unprompted
+     * remarks switched off, quiet hours, or snoozed.
      */
-    private fun liquidQuestion(): String? = runCatching {
+    private fun liquidFeeling(): String? = runCatching {
+        val current = state ?: return@runCatching null
         val store = service.app.moPrefs
-        val now = System.currentTimeMillis()
-        if (!store.profile.initiatives || MoPolicy(store).quiet(now)) return@runCatching null
-        listOf("How are you doing?", "Hi. How are you doing?", "How's your day going?").random()
+        if (!store.profile.initiatives || MoPolicy(store).quiet(System.currentTimeMillis())) return@runCatching null
+        Mo.feeling(current.mood, Mo.isRested(current.total, current.mood), Random.nextLong())
     }.getOrNull()
 
     /**
-     * Experimental, behind its own setting: Mo comes out of the island, hovers, and goes back in,
-     * with the island stretching like a liquid. Skipped while asleep, in a call, while Mo is
-     * speaking, while the panel is open, or if it played a moment ago.
+     * Plans the next time Mo comes out: the user's frequency (an hour by default) after the last
+     * time, and not sooner than a moment after the app opened. Nothing when the experiment is off or
+     * no tracked app is open.
+     */
+    private fun scheduleLiquid() {
+        handler.removeCallbacks(liquidTick)
+        if (!display.liquidIsland || session == null) return
+        val due = settings.liquidLastAt + display.liquidEvery.ms - System.currentTimeMillis()
+        handler.postDelayed(liquidTick, maxOf(LIQUID_FIRST_DELAY_MS, due))
+    }
+
+    /** The whole screen, including the bars, in pixels. */
+    private fun screenBounds(): Rect =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Rect(windowManager.maximumWindowMetrics.bounds)
+        else service.resources.displayMetrics.let { Rect(0, 0, it.widthPixels, it.heightPixels) }
+
+    /**
+     * Experimental, behind its own setting: Mo comes out of the island in a drop, roams the whole
+     * screen along a random route, shakes its body and says how it feels, then goes back in. Skipped
+     * while asleep, in a call, while Mo is speaking or the panel is open (it tries again a little
+     * later), or if it played a moment ago.
      */
     private fun liquidEmerge(reason: String, minGapMs: Long) {
         if (!display.liquidIsland) return
-        val views = patch ?: return
+        val views = patch ?: run {
+            // The island isn't up (snoozed, say): try again soon, if this was the scheduled one.
+            if (minGapMs == 0L && session != null) handler.postDelayed(liquidTick, LIQUID_RETRY_MS)
+            return
+        }
         val now = SystemClock.uptimeMillis()
         val island = liquid ?: LiquidIsland(service, windowManager).also { liquid = it }
-        if (island.running || moAsleep || inCall || speech != null || panel != null || now - lastLiquidAtMs < minGapMs) return
+        if (now - lastLiquidAtMs < minGapMs) return
+        if (island.running || moAsleep || inCall || speech != null || panel != null) {
+            // Not a good moment: try again soon, if this was the scheduled one.
+            if (minGapMs == 0L && session != null) handler.postDelayed(liquidTick, LIQUID_RETRY_MS)
+            return
+        }
         lastLiquidAtMs = now
         val pill = Rect(views.params.x, views.params.y, views.params.x + views.params.width, views.params.y + views.params.height)
         val moCenterX = views.params.x + views.left.left + views.left.width / 2f
-        val message = liquidQuestion()
+        val message = liquidFeeling()
+        val seed = Random.nextLong()
         DetectionLog.add(
-            "liquid: Mo comes out ($reason), liquid stretch ${Build.VERSION.SDK_INT >= Build.VERSION_CODES.S}, " +
-                "asks: ${message ?: "nothing (quiet)"}",
+            "liquid: Mo comes out ($reason), route seed $seed, liquid stretch ${Build.VERSION.SDK_INT >= Build.VERSION_CODES.S}, " +
+                "says: ${message ?: "nothing (quiet)"}",
         )
         val started = island.play(
             pill = pill,
@@ -1020,10 +1051,18 @@ class CounterOverlay(
             mood = state?.mood ?: Mood.CHILL,
             profile = profile(),
             message = message,
+            screen = screenBounds(),
+            seed = seed,
             hideRealMo = { hide -> views.mo.alpha = if (hide) 0f else 1f },
             onEnd = {},
         )
-        if (!started) lastLiquidAtMs = 0L
+        if (started) {
+            settings.liquidLastAt = System.currentTimeMillis()
+            // Counted from now: the next time Mo is due is a whole interval away.
+            scheduleLiquid()
+        } else {
+            lastLiquidAtMs = 0L
+        }
     }
 
     /**
@@ -1121,6 +1160,10 @@ class CounterOverlay(
         /** The island never starts closer than this to the top edge of the screen. */
         const val PATCH_TOP_GAP_DP = 3
         const val INFO_FLIP_MS = 2_800L
+        /** Mo comes out no sooner than this after a tracked app opens. */
+        const val LIQUID_FIRST_DELAY_MS = 1_400L
+        /** When it wasn't a good moment, try again after this. */
+        const val LIQUID_RETRY_MS = 60_000L
         /** How long the timer stays up each time it shows, when it isn't always on. */
         const val TIMER_REVEAL_MS = 5_000L
         const val SNOOZE_MS = 60 * 60_000L

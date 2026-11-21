@@ -55,34 +55,7 @@ class LiquidTimelineTest {
         assertEquals(0f, LiquidTimeline.position(2f), eps)
     }
 
-    // --- Roaming while out ---
-
-    private fun roamAt(u: Float) = LiquidTimeline.roam(LiquidTimeline.POP_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.POP_END))
-
-    @Test
-    fun roamsOnlyWhileOutAndReturnsToWhereItCameOut() {
-        val before = LiquidTimeline.roam(LiquidTimeline.OUT_END / 2f)
-        val after = LiquidTimeline.roam((1f + LiquidTimeline.HOLD_END) / 2f)
-        for (r in listOf(before, after, roamAt(0f), roamAt(1f))) {
-            assertEquals(0f, r.envelope, eps); assertEquals(0f, r.wander, eps)
-            assertEquals(0f, r.bob, eps)
-        }
-        // Just inside either end it is still next to where it started.
-        assertTrue(roamAt(0.01f).envelope < 0.05f)
-        assertTrue(roamAt(0.99f).envelope < 0.05f)
-    }
-
-    @Test
-    fun wandersBothWaysAndStaysInRange() {
-        val samples = (1..99).map { roamAt(it / 100f) }
-        assertTrue("goes one way", samples.minOf { it.wander } < -0.3f)
-        assertTrue("and the other", samples.maxOf { it.wander } > 0.3f)
-        for (r in samples) {
-            assertTrue(r.envelope in 0f..1f)
-            assertTrue(r.wander in -1f..1f)
-            assertTrue(r.bob in 0f..1f)
-        }
-    }
+    // --- Roaming ---
 
     private fun atU(u: Float) = LiquidTimeline.POP_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.POP_END)
 

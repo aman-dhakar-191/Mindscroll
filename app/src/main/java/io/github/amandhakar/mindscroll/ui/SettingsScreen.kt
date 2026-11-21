@@ -43,6 +43,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
     var motionStyle by remember { mutableStateOf(settings.motionStyle) }
     var milestones by remember { mutableStateOf(settings.milestoneReactions) }
     var liquidIsland by remember { mutableStateOf(settings.liquidIsland) }
+    var liquidEvery by remember { mutableStateOf(settings.liquidEvery) }
 
     Scaffold(
         topBar = {
@@ -157,12 +158,31 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     PreferenceSwitch(
                         title = "Liquid island",
-                        subtitle = "Mo comes out of the island and goes back in, and the island stretches like a liquid. " +
-                            "Plays when an app opens and when you tap Mo. Experimental: it may look rough. The stretch needs Android 12 or newer.",
+                        subtitle = "Mo comes out of the island in a drop of liquid, roams the whole screen along a random " +
+                            "route, shakes its body and says how it feels, then goes back in. Also when you tap Mo. " +
+                            "Experimental: it may look rough. The liquid stretch needs Android 12 or newer.",
                         checked = liquidIsland,
                     ) {
                         liquidIsland = it
                         settings.liquidIsland = it
+                    }
+                    Text("How often", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                    for ((option, label) in listOf(
+                        Settings.LiquidEvery.QUARTER_HOUR to "Every 15 minutes",
+                        Settings.LiquidEvery.HALF_HOUR to "Every 30 minutes",
+                        Settings.LiquidEvery.HOUR to "Every hour",
+                        Settings.LiquidEvery.TWO_HOURS to "Every 2 hours",
+                        Settings.LiquidEvery.FOUR_HOURS to "Every 4 hours",
+                    )) {
+                        ChoiceRow(
+                            label = label,
+                            selected = liquidEvery == option,
+                            subtitle = if (option == Settings.LiquidEvery.HOUR) "Default. At most this often, while a tracked app is open." else null,
+                            enabled = liquidIsland,
+                        ) {
+                            liquidEvery = option
+                            settings.liquidEvery = option
+                        }
                     }
                 }
             }

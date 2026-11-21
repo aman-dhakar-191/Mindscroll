@@ -60,6 +60,13 @@ object Mo {
     }
 
     /**
+     * Mo telling you how Mo feels: a line about [mood] (or about being [rested] after a break),
+     * not about the count. Picked by [seed], so it isn't always the same.
+     */
+    fun feeling(mood: Mood, rested: Boolean, seed: Long): String =
+        pick(if (rested) feelingRested else feelings.getValue(mood), seed)
+
+    /**
      * Mo has rested when the break brought the mood below what today's count alone would
      * give: lots of reels today, but not lately.
      */
@@ -96,6 +103,51 @@ object Mo {
         200L to "200. My apartment is spinning and it's a studio, so that's everything.",
         300L to "300. I'm not mad. I'm just… lying down.",
         500L to "500. I'm writing this one down. In very wobbly handwriting.",
+    )
+
+    private val feelingRested = listOf(
+        "Feeling rested after that break. Thank you.",
+        "Better now. Breaks work.",
+        "Calmer. You helped.",
+        "That break was nice. I feel new.",
+    )
+
+    private val feelings = mapOf(
+        Mood.CHILL to listOf(
+            "Feeling chill. Like a blob that's had water.",
+            "Calm in here today. I like it.",
+            "I'm good. Properly good.",
+            "Light and easy. That's me right now.",
+            "Not a wobble in sight. Nice.",
+        ),
+        Mood.CURIOUS to listOf(
+            "Feeling curious. What's out there?",
+            "I'm in a nosy mood. A fun one.",
+            "Wide awake and looking at everything.",
+            "Curious today. Ask me anything.",
+            "Something's up. I can feel it. Probably nothing.",
+        ),
+        Mood.WOBBLY to listOf(
+            "A little wobbly right now. I'll be fine.",
+            "Feeling unsteady. Hold still with me?",
+            "Wobbly. Not falling. Wobbly.",
+            "My edges are a bit soft today.",
+            "I'm okay. Just a bit tilted.",
+        ),
+        Mood.DIZZY to listOf(
+            "Everything's spinning. Hello from the carousel.",
+            "Dizzy. Not complaining. Mostly.",
+            "Mood: tiny hurricane.",
+            "The room is doing laps. I'm fine.",
+            "Feeling spiral-eyed. It passes.",
+        ),
+        Mood.SLEEPY to listOf(
+            "Running on fumes. Still here, though.",
+            "Sleepy. Don't mind me.",
+            "Feeling slow and soft. Nap soon?",
+            "My eyes are doing the heavy thing.",
+            "Low battery, big heart.",
+        ),
     )
 
     private val lines = mapOf(

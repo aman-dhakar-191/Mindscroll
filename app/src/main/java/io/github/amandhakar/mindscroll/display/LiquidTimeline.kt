@@ -4,26 +4,27 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * The timing of Mo coming out of the island, roaming around outside to stretch, and going back in.
+ * The timing of Mo coming out of the island, roaming the screen, and going back in.
  *
  * 1. Mo is pushed out of the island inside a drop of liquid ([position] overshoots and wobbles).
  * 2. The drop pops: it shrinks and is drawn back into the island, and Mo is out completely, free.
- * 3. Mo [roam]s around outside, shakes its body ([shake]) and asks how you are doing ([bubbleAlpha]).
- *    It starts and ends at the spot it came out of.
+ * 3. Mo roams the whole screen along a random [RoamPath], shakes its body ([shake]) and says how it
+ *    feels ([bubbleAlpha]). The path starts and ends at the spot Mo came out of.
  * 4. A new drop forms around Mo ([drop]), and Mo winds up and is pulled back in.
  *
  * Pure maths, so the shape of the motion is tested.
  */
 object LiquidTimeline {
-    const val TOTAL_MS = 5_200L
+    /** 0.7 s out in the drop, 0.5 s popping, 6.2 s roaming the screen, then 1 s back in. */
+    const val TOTAL_MS = 8_400L
 
     /** Fractions of the whole. Out in a drop until [OUT_END]; the drop pops by [POP_END], and Mo is free. */
-    const val OUT_END = 0.14f
-    const val POP_END = 0.24f
+    const val OUT_END = 0.0833f
+    const val POP_END = 0.1429f
 
     /** A new drop starts forming around Mo at [FORM_START] and is whole at [HOLD_END]; then Mo is pulled in. */
-    const val FORM_START = 0.74f
-    const val HOLD_END = 0.84f
+    const val FORM_START = 0.8095f
+    const val HOLD_END = 0.881f
 
     private const val OUT_TENSION = 1.6f
     private const val BACK_TENSION = 1.4f
@@ -65,22 +66,6 @@ object LiquidTimeline {
         t < FORM_START -> Drop(0f, 0f)
         t < HOLD_END -> Drop(overshoot((t - FORM_START) / (HOLD_END - FORM_START), 1.2f), 1f)
         else -> Drop(1f, 1f)
-    }
-
-    /**
-     * Where Mo wanders while it is free. [envelope] rises from 0 to 1 and back to 0 over the roam
-     * (so Mo leaves and returns to the spot it came out of); [wander] swings left and right
-     * (-1..1, one and a half sweeps); [bob] lets it sink lower and rise (0..1).
-     */
-    data class Roam(val envelope: Float, val wander: Float, val bob: Float)
-
-    fun roam(t: Float): Roam {
-        val u = ((t - POP_END) / (HOLD_END - POP_END))
-        if (u <= 0f || u >= 1f) return Roam(0f, 0f, 0f)
-        val envelope = sin(PI.toFloat() * u)
-        val wander = envelope * sin(2f * PI.toFloat() * 1.5f * u)
-        val bob = envelope * (0.5f + 0.5f * sin(2f * PI.toFloat() * 2.2f * u + 1f))
-        return Roam(envelope, wander, bob)
     }
 
     /**

@@ -24,6 +24,15 @@ class Settings(context: Context) {
      */
     enum class AppInfo { TIMER, COUNTER, BOTH, NOTHING }
 
+    /** How often Mo comes out of the island (the liquid island experiment), at most. */
+    enum class LiquidEvery(val ms: Long) {
+        QUARTER_HOUR(15 * 60_000L),
+        HALF_HOUR(30 * 60_000L),
+        HOUR(60 * 60_000L),
+        TWO_HOURS(2 * 60 * 60_000L),
+        FOUR_HOURS(4 * 60 * 60_000L),
+    }
+
     /** How soon after leaving an app the island hides. */
     enum class LeaveDelay(val ms: Long) { THREE_SECONDS(3_000L), FIVE_SECONDS(5_000L) }
 
@@ -91,6 +100,7 @@ class Settings(context: Context) {
         val leaveDelay: LeaveDelay = LeaveDelay.THREE_SECONDS,
         /** Experimental: Mo comes out of the island and goes back in, with a liquid stretch. Off by default. */
         val liquidIsland: Boolean = false,
+        val liquidEvery: LiquidEvery = LiquidEvery.HOUR,
         val character: MoCharacter = MoCharacter.MO,
         val palette: MoPalette = MoPalette.CLASSIC,
     )
@@ -160,6 +170,17 @@ class Settings(context: Context) {
     var liquidIsland: Boolean
         get() = prefs.getBoolean(KEY_LIQUID_ISLAND, false)
         set(value) = prefs.edit().putBoolean(KEY_LIQUID_ISLAND, value).apply()
+
+    /** How often Mo comes out (see [LiquidEvery]). An hour until the user chooses. */
+    var liquidEvery: LiquidEvery
+        get() = runCatching { LiquidEvery.valueOf(prefs.getString(KEY_LIQUID_EVERY, LiquidEvery.HOUR.name)!!) }
+            .getOrDefault(LiquidEvery.HOUR)
+        set(value) = prefs.edit().putString(KEY_LIQUID_EVERY, value.name).apply()
+
+    /** When Mo last came out, in wall-clock ms (0 for never), so the frequency holds across restarts. */
+    var liquidLastAt: Long
+        get() = prefs.getLong(KEY_LIQUID_LAST_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_LIQUID_LAST_AT, value).apply()
 
     var leaveDelay: LeaveDelay
         get() = runCatching { LeaveDelay.valueOf(prefs.getString(KEY_LEAVE_DELAY, LeaveDelay.THREE_SECONDS.name)!!) }
@@ -245,13 +266,13 @@ class Settings(context: Context) {
 
     fun display() = Display(
         cameraPatch, bubble, infoChoices(), mascotSize, motionStyle, milestoneReactions,
-        timerReveal, counterTimerEvery, leaveDelay, liquidIsland, mascotCharacter, mascotPalette,
+        timerReveal, counterTimerEvery, leaveDelay, liquidIsland, liquidEvery, mascotCharacter, mascotPalette,
     )
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_APP_INFO ||
-                key == KEY_COUNTER_TIMER_EVERY || key == KEY_LEAVE_DELAY || key == KEY_LIQUID_ISLAND || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
+                key == KEY_COUNTER_TIMER_EVERY || key == KEY_LEAVE_DELAY || key == KEY_LIQUID_ISLAND || key == KEY_LIQUID_EVERY || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
                 key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE || key == KEY_TIMER_REVEAL
             ) trySend(display())
         }
@@ -271,6 +292,8 @@ class Settings(context: Context) {
         const val KEY_COUNTER_TIMER_EVERY = "counter_timer_every"
         const val KEY_LEAVE_DELAY = "leave_delay"
         const val KEY_LIQUID_ISLAND = "liquid_island"
+        const val KEY_LIQUID_EVERY = "liquid_every"
+        const val KEY_LIQUID_LAST_AT = "liquid_last_at"
         const val KEY_MASCOT_SIZE = "mascot_size"
         const val KEY_MOTION_STYLE = "motion_style"
         const val KEY_MILESTONE_REACTIONS = "milestone_reactions"
