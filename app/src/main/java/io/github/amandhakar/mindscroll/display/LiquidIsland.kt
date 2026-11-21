@@ -26,8 +26,8 @@ import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
 
 /**
- * Experimental. Mo comes out of the island, hovers, and goes back in, and the island stretches
- * toward Mo like a liquid and pulls it back in.
+ * Experimental. Mo comes out of the island, roams around outside for a while to stretch a little,
+ * and goes back in, and the island stretches toward Mo like a liquid and pulls it back in.
  *
  * It is a second, see-through window drawn over the island's own window, which stays as it is.
  * The window draws a thin black strip along the island's bottom edge (clear of the numbers) and a
@@ -74,14 +74,20 @@ class LiquidIsland(
         // Far enough out that the blob hangs just clear of the island, joined by a thin neck.
         val cyOut = pillH + radius + dp(3)
         val winW = pill.width() + 2 * margin
-        val winH = (cyOut + radius + dp(24)).toInt()
+        val bobPx = dp(10)
+        val winH = (cyOut + bobPx + radius * 1.25f + dp(24)).toInt()
         val originX = pill.left - margin
         val cx = moCenterX - originX
 
         val strip = RectF(
             margin + pillH / 2f, pillH - dp(12), margin + pill.width() - pillH / 2f, pillH,
         )
-        val goo = GooView(context).also { it.setGeometry(strip, cx, cyIn, radius) }
+        // Where Mo may wander: along under the island, clear of its ends.
+        val xMin = margin + radius
+        val xMax = margin + pill.width() - radius
+        val xMid = (xMin + xMax) / 2f
+        val reach = (xMax - xMin) / 2f * 0.85f
+        val goo = GooView(context).also { it.setGeometry(strip, cx, cyIn, radius, radius) }
         val mo = MoView(context).apply {
             this.mood = mood
             this.profile = profile
@@ -124,7 +130,10 @@ class LiquidIsland(
         running = true
         var realMoHidden = false
         var waved = false
-        var glanced = false
+        var glancedAt = 0
+        var stretched = false
+        var lastX = cx
+        var lean = 0f
 
         fun finish() {
             if (!running) return
@@ -142,20 +151,42 @@ class LiquidIsland(
             addUpdateListener { va ->
                 val t = va.animatedFraction
                 val p = LiquidTimeline.position(t)
-                val cy = cyIn + (cyOut - cyIn) * p
-                goo.setGeometry(strip, cx, cy, radius)
+                val roam = LiquidTimeline.roam(t)
+                // Out from the island, then wandering: from Mo's own spot toward the middle, swinging
+                // left and right, sinking and rising, and back to its own spot before it is pulled in.
+                val x = (cx + (xMid - cx) * roam.envelope + reach * roam.wander).coerceIn(xMin, xMax)
+                val cy = cyIn + (cyOut - cyIn) * p + bobPx * roam.bob
+                // The blob swells a little when Mo stretches.
+                val rx = radius * (1f - 0.06f * roam.stretch)
+                val ry = radius * (1f + 0.10f * roam.stretch)
+                goo.setGeometry(strip, x, cy, rx, ry)
+                mo.translationX = x - moSize / 2f
                 mo.translationY = cy - moSize / 2f
+                // Leans into the way it is going, and straightens up as it slows.
+                lean += ((x - lastX) * 2.2f - lean) * 0.2f
+                lastX = x
+                mo.rotation = lean.coerceIn(-10f, 10f)
                 // The island's own Mo steps out just after this one is drawn over it, so nothing flickers.
-                if (!realMoHidden && t > 0.02f) {
+                if (!realMoHidden && t > 0.01f) {
                     realMoHidden = true
                     hideRealMo(true)
                 }
+                val u = LiquidTimeline.roamProgress(t)
                 if (!waved && LiquidTimeline.isOut(t)) {
                     waved = true
                     mo.react(intensity = 0.7f, excited = true)
                 }
-                if (!glanced && t >= 0.5f) {
-                    glanced = true
+                // A look around, a good stretch in the middle, another look around.
+                if (glancedAt == 0 && u >= 0.22f) {
+                    glancedAt = 1
+                    mo.glance()
+                }
+                if (!stretched && u >= 0.45f) {
+                    stretched = true
+                    mo.stretch()
+                }
+                if (glancedAt == 1 && u >= 0.72f) {
+                    glancedAt = 2
                     mo.glance()
                 }
             }
@@ -179,7 +210,8 @@ class LiquidIsland(
         private val strip = RectF()
         private var cx = 0f
         private var cy = 0f
-        private var r = 0f
+        private var rx = 0f
+        private var ry = 0f
 
         init {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -200,17 +232,18 @@ class LiquidIsland(
             }
         }
 
-        fun setGeometry(strip: RectF, cx: Float, cy: Float, r: Float) {
+        fun setGeometry(strip: RectF, cx: Float, cy: Float, rx: Float, ry: Float) {
             this.strip.set(strip)
             this.cx = cx
             this.cy = cy
-            this.r = r
+            this.rx = rx
+            this.ry = ry
             invalidate()
         }
 
         override fun onDraw(canvas: Canvas) {
             canvas.drawRoundRect(strip, strip.height() / 2f, strip.height() / 2f, paint)
-            canvas.drawCircle(cx, cy, r, paint)
+            canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, paint)
         }
 
         private companion object {

@@ -54,4 +54,49 @@ class LiquidTimelineTest {
         assertEquals(0f, LiquidTimeline.position(-1f), eps)
         assertEquals(0f, LiquidTimeline.position(2f), eps)
     }
+
+    // --- Roaming while out ---
+
+    private fun roamAt(u: Float) = LiquidTimeline.roam(LiquidTimeline.OUT_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.OUT_END))
+
+    @Test
+    fun roamsOnlyWhileOutAndReturnsToWhereItCameOut() {
+        val before = LiquidTimeline.roam(LiquidTimeline.OUT_END / 2f)
+        val after = LiquidTimeline.roam((1f + LiquidTimeline.HOLD_END) / 2f)
+        for (r in listOf(before, after, roamAt(0f), roamAt(1f))) {
+            assertEquals(0f, r.envelope, eps); assertEquals(0f, r.wander, eps)
+            assertEquals(0f, r.bob, eps); assertEquals(0f, r.stretch, eps)
+        }
+        // Just inside either end it is still next to where it started.
+        assertTrue(roamAt(0.01f).envelope < 0.05f)
+        assertTrue(roamAt(0.99f).envelope < 0.05f)
+    }
+
+    @Test
+    fun wandersBothWaysAndStaysInRange() {
+        val samples = (1..99).map { roamAt(it / 100f) }
+        assertTrue("goes one way", samples.minOf { it.wander } < -0.3f)
+        assertTrue("and the other", samples.maxOf { it.wander } > 0.3f)
+        for (r in samples) {
+            assertTrue(r.envelope in 0f..1f)
+            assertTrue(r.wander in -1f..1f)
+            assertTrue(r.bob in 0f..1f)
+            assertTrue(r.stretch in 0f..1f)
+        }
+    }
+
+    @Test
+    fun hasItsBigStretchInTheMiddle() {
+        assertEquals(1f, roamAt(0.5f).stretch, eps)
+        assertTrue(roamAt(0.2f).stretch < 0.1f)
+        assertTrue(roamAt(0.8f).stretch < 0.1f)
+    }
+
+    @Test
+    fun roamProgressRunsFromZeroToOneWhileOut() {
+        assertEquals(0f, LiquidTimeline.roamProgress(LiquidTimeline.OUT_END), eps)
+        assertEquals(1f, LiquidTimeline.roamProgress(LiquidTimeline.HOLD_END), eps)
+        assertEquals(0f, LiquidTimeline.roamProgress(0f), eps)
+        assertEquals(1f, LiquidTimeline.roamProgress(1f), eps)
+    }
 }
