@@ -13,13 +13,17 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.RenderEffect
+import android.graphics.drawable.GradientDrawable
 import android.graphics.Shader
 import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.util.TypedValue
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
+import android.widget.TextView
+import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MotionProfile
 import io.github.amandhakar.mindscroll.mascot.Mood
@@ -27,8 +31,8 @@ import io.github.amandhakar.mindscroll.tracker.DetectionLog
 
 /**
  * Experimental. Mo is pushed out of the island inside a drop of liquid; the drop pops and Mo is out
- * completely, roams around outside and has a stretch; then a new drop forms around Mo and the
- * island pulls it back in. See [LiquidTimeline] for the sequence.
+ * completely, roams around outside, shakes its body and asks how you are doing; then a new drop
+ * forms around Mo and the island pulls it back in. See [LiquidTimeline] for the sequence.
  *
  * It is a second, see-through window drawn over the island's own window, which stays as it is.
  * The window draws a thin black strip along the island's bottom edge (clear of the numbers) and a
@@ -52,7 +56,8 @@ class LiquidIsland(
 
     /**
      * Plays it once. [pill] is the island on screen, [moCenterX] where Mo's slot is, and
-     * [hideRealMo] hides (true) or shows (false) the island's own Mo while this one is out.
+     * [hideRealMo] hides (true) or shows (false) the island's own Mo while this one is out. [message]
+     * is what Mo asks while it roams, or null to stay quiet.
      * [onEnd] runs when it is over, or cancelled. Returns false if it could not start.
      */
     fun play(
@@ -61,6 +66,7 @@ class LiquidIsland(
         moSize: Int,
         mood: Mood,
         profile: MotionProfile,
+        message: String?,
         hideRealMo: (Boolean) -> Unit,
         onEnd: () -> Unit,
     ): Boolean {
@@ -77,7 +83,30 @@ class LiquidIsland(
         val cyOut = pillH + radius + dp(3)
         val winW = pill.width() + 2 * margin
         val bobPx = dp(10)
-        val winH = (cyOut + bobPx + radius * 1.25f + dp(24)).toInt()
+        // Mo's question goes in a bubble under it, drawn the way Mo's other bubbles are.
+        val bubble = message?.let { line ->
+            TextView(context).apply {
+                text = line
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                maxWidth = dp(190)
+                gravity = Gravity.CENTER
+                setPadding(dp(14), dp(9), dp(14), dp(10))
+                background = GradientDrawable().apply {
+                    setColor(Color.BLACK)
+                    cornerRadius = dp(18).toFloat()
+                    setStroke(dp(1), MoLook.color(mood))
+                }
+                alpha = 0f
+                measure(
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                )
+            }
+        }
+        val bubbleW = bubble?.measuredWidth ?: 0
+        val bubbleH = bubble?.measuredHeight ?: 0
+        val winH = (cyOut + bobPx + radius * 1.25f + dp(24) + bubbleH + dp(8)).toInt()
         val originX = pill.left - margin
         val cx = moCenterX - originX
 
@@ -100,6 +129,7 @@ class LiquidIsland(
             clipChildren = false
             addView(goo, FrameLayout.LayoutParams(winW, winH))
             addView(mo, FrameLayout.LayoutParams(moSize, moSize))
+            bubble?.let { addView(it, FrameLayout.LayoutParams(bubbleW, bubbleH)) }
         }
         mo.translationX = cx - moSize / 2f
         mo.translationY = cyIn - moSize / 2f
@@ -134,7 +164,7 @@ class LiquidIsland(
         var realMoHidden = false
         var waved = false
         var glancedAt = 0
-        var stretched = false
+        var shook = false
         var lastX = cx
         var lean = 0f
 
@@ -166,13 +196,19 @@ class LiquidIsland(
                 goo.setGeometry(strip, x, dropY, radius * drop.scale, radius * drop.scale)
                 mo.translationX = x - moSize / 2f
                 mo.translationY = cy - moSize / 2f
-                // A good stretch: taller and slimmer at the peak.
-                mo.scaleX = 1f - 0.08f * roam.stretch
-                mo.scaleY = 1f + 0.18f * roam.stretch
                 // Leans into the way it is going, and straightens up as it slows.
                 lean += ((x - lastX) * 2.2f - lean) * 0.2f
                 lastX = x
-                mo.rotation = lean.coerceIn(-10f, 10f)
+                // A shake of the whole body, from side to side, in the middle of the roam.
+                val shake = LiquidTimeline.shake(t)
+                mo.rotation = lean.coerceIn(-10f, 10f) + 14f * shake
+                mo.translationX += dp(2) * shake
+                // The question under Mo, following it, fading in and out.
+                bubble?.let {
+                    it.alpha = LiquidTimeline.bubbleAlpha(t)
+                    it.translationX = (x - bubbleW / 2f).coerceIn(0f, (winW - bubbleW).toFloat())
+                    it.translationY = cy + moSize / 2f + dp(8)
+                }
                 // The island's own Mo steps out just after this one is drawn over it, so nothing flickers.
                 if (!realMoHidden && t > 0.01f) {
                     realMoHidden = true
@@ -184,14 +220,14 @@ class LiquidIsland(
                     waved = true
                     mo.react(intensity = 0.9f, excited = true)
                 }
-                // A look around, a good stretch in the middle, another look around.
+                // A look around, a happy shake in the middle, another look around.
                 if (glancedAt == 0 && u >= 0.22f) {
                     glancedAt = 1
                     mo.glance()
                 }
-                if (!stretched && u >= 0.45f) {
-                    stretched = true
-                    mo.stretch()
+                if (!shook && u >= 0.40f) {
+                    shook = true
+                    mo.react(intensity = 0.6f, excited = true)
                 }
                 if (glancedAt == 1 && u >= 0.72f) {
                     glancedAt = 2

@@ -1,7 +1,6 @@
 package io.github.amandhakar.mindscroll.display
 
 import kotlin.math.PI
-import kotlin.math.exp
 import kotlin.math.sin
 
 /**
@@ -9,7 +8,8 @@ import kotlin.math.sin
  *
  * 1. Mo is pushed out of the island inside a drop of liquid ([position] overshoots and wobbles).
  * 2. The drop pops: it shrinks and is drawn back into the island, and Mo is out completely, free.
- * 3. Mo [roam]s around outside and has a good stretch. It starts and ends at the spot it came out of.
+ * 3. Mo [roam]s around outside, shakes its body ([shake]) and asks how you are doing ([bubbleAlpha]).
+ *    It starts and ends at the spot it came out of.
  * 4. A new drop forms around Mo ([drop]), and Mo winds up and is pulled back in.
  *
  * Pure maths, so the shape of the motion is tested.
@@ -70,21 +70,50 @@ object LiquidTimeline {
     /**
      * Where Mo wanders while it is free. [envelope] rises from 0 to 1 and back to 0 over the roam
      * (so Mo leaves and returns to the spot it came out of); [wander] swings left and right
-     * (-1..1, one and a half sweeps); [bob] lets it sink lower and rise (0..1); [stretch] peaks
-     * (1) at the middle, when Mo has a good stretch.
+     * (-1..1, one and a half sweeps); [bob] lets it sink lower and rise (0..1).
      */
-    data class Roam(val envelope: Float, val wander: Float, val bob: Float, val stretch: Float)
+    data class Roam(val envelope: Float, val wander: Float, val bob: Float)
 
     fun roam(t: Float): Roam {
         val u = ((t - POP_END) / (HOLD_END - POP_END))
-        if (u <= 0f || u >= 1f) return Roam(0f, 0f, 0f, 0f)
+        if (u <= 0f || u >= 1f) return Roam(0f, 0f, 0f)
         val envelope = sin(PI.toFloat() * u)
         val wander = envelope * sin(2f * PI.toFloat() * 1.5f * u)
         val bob = envelope * (0.5f + 0.5f * sin(2f * PI.toFloat() * 2.2f * u + 1f))
-        val away = (u - 0.5f) / 0.09f
-        val stretch = exp(-away * away)
-        return Roam(envelope, wander, bob, stretch)
+        return Roam(envelope, wander, bob)
     }
+
+    /**
+     * Mo shaking its body, as a dog shakes off water: -1..1, swinging five times in the middle of
+     * the roam and easing in and out. Zero before and after.
+     */
+    fun shake(t: Float): Float {
+        val v = (roamProgress(t) - SHAKE_FROM) / SHAKE_LENGTH
+        if (v <= 0f || v >= 1f) return 0f
+        return sin(PI.toFloat() * v) * sin(2f * PI.toFloat() * 5f * v)
+    }
+
+    /**
+     * How visible the "how are you doing?" bubble is, 0..1: it fades in just before Mo shakes, stays
+     * while it does, and fades out after.
+     */
+    fun bubbleAlpha(t: Float): Float {
+        val u = roamProgress(t)
+        if (!isFree(t)) return 0f
+        return when {
+            u < BUBBLE_IN -> 0f
+            u < BUBBLE_IN + BUBBLE_FADE -> (u - BUBBLE_IN) / BUBBLE_FADE
+            u < BUBBLE_OUT -> 1f
+            u < BUBBLE_OUT + BUBBLE_FADE -> 1f - (u - BUBBLE_OUT) / BUBBLE_FADE
+            else -> 0f
+        }
+    }
+
+    private const val SHAKE_FROM = 0.40f
+    private const val SHAKE_LENGTH = 0.20f
+    private const val BUBBLE_IN = 0.30f
+    private const val BUBBLE_OUT = 0.64f
+    private const val BUBBLE_FADE = 0.06f
 
     /** 0 at the start, 1 at the end, past 1 in between: the same curve as Android's OvershootInterpolator. */
     fun overshoot(t: Float, tension: Float): Float {

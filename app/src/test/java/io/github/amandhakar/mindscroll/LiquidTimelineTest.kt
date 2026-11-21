@@ -65,7 +65,7 @@ class LiquidTimelineTest {
         val after = LiquidTimeline.roam((1f + LiquidTimeline.HOLD_END) / 2f)
         for (r in listOf(before, after, roamAt(0f), roamAt(1f))) {
             assertEquals(0f, r.envelope, eps); assertEquals(0f, r.wander, eps)
-            assertEquals(0f, r.bob, eps); assertEquals(0f, r.stretch, eps)
+            assertEquals(0f, r.bob, eps)
         }
         // Just inside either end it is still next to where it started.
         assertTrue(roamAt(0.01f).envelope < 0.05f)
@@ -81,15 +81,39 @@ class LiquidTimelineTest {
             assertTrue(r.envelope in 0f..1f)
             assertTrue(r.wander in -1f..1f)
             assertTrue(r.bob in 0f..1f)
-            assertTrue(r.stretch in 0f..1f)
         }
     }
 
+    private fun atU(u: Float) = LiquidTimeline.POP_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.POP_END)
+
     @Test
-    fun hasItsBigStretchInTheMiddle() {
-        assertEquals(1f, roamAt(0.5f).stretch, eps)
-        assertTrue(roamAt(0.2f).stretch < 0.1f)
-        assertTrue(roamAt(0.8f).stretch < 0.1f)
+    fun shakesItsBodyOnlyInTheMiddleOfTheRoam() {
+        for (u in listOf(0f, 0.1f, 0.3f, 0.39f, 0.61f, 0.8f, 1f)) assertEquals("u=$u", 0f, LiquidTimeline.shake(atU(u)), eps)
+        val shake = (400..600).map { LiquidTimeline.shake(atU(it / 1000f)) }
+        assertTrue("swings one way", shake.min() < -0.5f)
+        assertTrue("and the other", shake.max() > 0.5f)
+        assertTrue(shake.all { it in -1f..1f })
+        // Five swings: it crosses zero about ten times.
+        val crossings = shake.zipWithNext().count { (a, b) -> a * b < 0f }
+        assertTrue("crossed zero $crossings times", crossings in 7..12)
+    }
+
+    @Test
+    fun asksHowYouAreDoingWhileItShakes() {
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(0f), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(LiquidTimeline.OUT_END), eps) // still in the drop
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(0.1f)), eps)
+        assertEquals(1f, LiquidTimeline.bubbleAlpha(atU(0.5f)), eps)
+        assertEquals(1f, LiquidTimeline.bubbleAlpha(atU(0.45f)), eps) // fully there as the shake begins
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(0.8f)), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(1f), eps)
+    }
+
+    @Test
+    fun theQuestionFadesInThenOutWithoutJumping() {
+        val alphas = (0..1000).map { LiquidTimeline.bubbleAlpha(atU(it / 1000f)) }
+        assertTrue(alphas.all { it in 0f..1f })
+        for (i in 0 until alphas.lastIndex) assertTrue("jump at $i", kotlin.math.abs(alphas[i + 1] - alphas[i]) < 0.05f)
     }
 
     @Test

@@ -33,7 +33,9 @@ import android.widget.ViewFlipper
 import android.widget.Toast
 import io.github.amandhakar.mindscroll.data.Durations
 import io.github.amandhakar.mindscroll.data.Settings
+import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.mascot.Mo
+import io.github.amandhakar.mindscroll.mascot.MoPolicy
 import io.github.amandhakar.mindscroll.mascot.MoLook
 import io.github.amandhakar.mindscroll.mascot.MoView
 import io.github.amandhakar.mindscroll.mascot.MoMotion
@@ -982,6 +984,17 @@ class CounterOverlay(
     }
 
     /**
+     * What Mo asks while it is out, or null when Mo keeps quiet: unprompted remarks switched off, quiet
+     * hours, or snoozed. Mo's voice: short, warm, first person.
+     */
+    private fun liquidQuestion(): String? = runCatching {
+        val store = service.app.moPrefs
+        val now = System.currentTimeMillis()
+        if (!store.profile.initiatives || MoPolicy(store).quiet(now)) return@runCatching null
+        listOf("How are you doing?", "Hi. How are you doing?", "How's your day going?").random()
+    }.getOrNull()
+
+    /**
      * Experimental, behind its own setting: Mo comes out of the island, hovers, and goes back in,
      * with the island stretching like a liquid. Skipped while asleep, in a call, while Mo is
      * speaking, while the panel is open, or if it played a moment ago.
@@ -995,13 +1008,18 @@ class CounterOverlay(
         lastLiquidAtMs = now
         val pill = Rect(views.params.x, views.params.y, views.params.x + views.params.width, views.params.y + views.params.height)
         val moCenterX = views.params.x + views.left.left + views.left.width / 2f
-        DetectionLog.add("liquid: Mo comes out ($reason), liquid stretch ${Build.VERSION.SDK_INT >= Build.VERSION_CODES.S}")
+        val message = liquidQuestion()
+        DetectionLog.add(
+            "liquid: Mo comes out ($reason), liquid stretch ${Build.VERSION.SDK_INT >= Build.VERSION_CODES.S}, " +
+                "asks: ${message ?: "nothing (quiet)"}",
+        )
         val started = island.play(
             pill = pill,
             moCenterX = moCenterX,
             moSize = patchMoSize(),
             mood = state?.mood ?: Mood.CHILL,
             profile = profile(),
+            message = message,
             hideRealMo = { hide -> views.mo.alpha = if (hide) 0f else 1f },
             onEnd = {},
         )
