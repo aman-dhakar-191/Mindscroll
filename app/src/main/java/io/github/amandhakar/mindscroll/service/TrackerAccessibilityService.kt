@@ -117,6 +117,7 @@ class TrackerAccessibilityService : AccessibilityService() {
                 .collect { (state, display) ->
                     CounterNotification.show(this@TrackerAccessibilityService, state)
                     overlay.show(state, display)
+                    appSessions.setLeaveDelay(display.leaveDelay.ms)
                     CounterWidget.update(this@TrackerAccessibilityService, state)
                     brain.onCounter(state.total, state.mood)
                 }

@@ -42,6 +42,11 @@ class AppSessionWatcher(
         }
     }
 
+    /** How long after leaving an app its session ends (see [AppSessions.setLeaveDelay]). */
+    fun setLeaveDelay(ms: Long) {
+        sessions.setLeaveDelay(ms)
+    }
+
     /** Which apps are tracked changed. */
     fun setPackages(packages: Set<String>) {
         sessions.setPackages(packages)

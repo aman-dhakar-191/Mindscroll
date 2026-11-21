@@ -36,6 +36,19 @@ class AppSessions(
     /** Where session starts and ends are explained, for the detection log. Empty by default. */
     var log: (String) -> Unit = {}
 
+    private var awayMs = AWAY_MS
+    private var unknownMs = UNKNOWN_MS
+
+    /**
+     * How long another app has to be in front before the session ends (the user's choice). When
+     * the phone can't say what is in front at all, it waits twice as long: that happens briefly
+     * mid-use too, and must not split a session.
+     */
+    fun setLeaveDelay(ms: Long) {
+        awayMs = ms
+        unknownMs = ms * 2
+    }
+
     private var lastSeenAt = 0L
     /** Time up to which the current session's usage was already handed out. */
     private var countedUntil = 0L
@@ -86,9 +99,9 @@ class AppSessions(
             front == session.packageName -> lastSeenAt = now
             front != null && front in packages -> onAppEvent(front, now)
             // Another app in front (or nothing known for a long while): give it a moment.
-            front != null && now - lastSeenAt >= AWAY_MS ->
+            front != null && now - lastSeenAt >= awayMs ->
                 end("${describeFront(front)} in front for ${(now - lastSeenAt) / 1000}s")
-            front == null && now - lastSeenAt >= UNKNOWN_MS ->
+            front == null && now - lastSeenAt >= unknownMs ->
                 end("couldn't tell what was in front for ${(now - lastSeenAt) / 1000}s")
         }
     }
