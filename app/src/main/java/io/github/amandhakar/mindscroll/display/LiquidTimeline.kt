@@ -9,24 +9,32 @@ import kotlin.math.sin
  *
  * 1. Mo is pushed out of the island inside a drop of liquid ([position] overshoots and wobbles).
  * 2. The drop pops: it shrinks and is drawn back into the island, and Mo is out completely, free.
- * 3. Mo roams the whole screen along a random [RoamPath] and, in the middle, does [midMove] (shakes its
- *    body, or yawns when it is sleepy) while saying how it feels ([bubbleAlpha]). The path starts and
- *    ends at the spot Mo came out of.
+ * 3. Mo roams the whole screen on a random [RoamPlan]: it goes somewhere, stays a while, goes
+ *    somewhere else, and so on. At its second stop it stands still and does [midMove] (shakes its body,
+ *    or yawns when it is sleepy) while saying how it feels ([bubbleAlpha]). It ends at the spot it
+ *    came out of.
  * 4. A new drop forms around Mo ([drop]), and Mo winds up and is pulled back in.
  *
  * Pure maths, so the shape of the motion is tested.
  */
 object LiquidTimeline {
-    /** 0.7 s out in the drop, 0.5 s popping, 6.2 s roaming the screen, then 1 s back in. */
-    const val TOTAL_MS = 8_400L
+    /** 0.7 s out in the drop, 0.5 s popping, 13 s roaming the screen, then 1 s back in. */
+    const val OUT_MS = 700L
+    const val POP_MS = 500L
+    const val ROAM_MS = 13_000L
+    const val BACK_MS = 1_000L
+    const val TOTAL_MS = OUT_MS + POP_MS + ROAM_MS + BACK_MS
+
+    /** How long the new drop takes to form around Mo before it is pulled in. */
+    private const val FORM_MS = 600L
 
     /** Fractions of the whole. Out in a drop until [OUT_END]; the drop pops by [POP_END], and Mo is free. */
-    const val OUT_END = 0.0833f
-    const val POP_END = 0.1429f
+    val OUT_END = OUT_MS.toFloat() / TOTAL_MS
+    val POP_END = (OUT_MS + POP_MS).toFloat() / TOTAL_MS
 
     /** A new drop starts forming around Mo at [FORM_START] and is whole at [HOLD_END]; then Mo is pulled in. */
-    const val FORM_START = 0.8095f
-    const val HOLD_END = 0.881f
+    val FORM_START = (OUT_MS + POP_MS + ROAM_MS - FORM_MS).toFloat() / TOTAL_MS
+    val HOLD_END = (OUT_MS + POP_MS + ROAM_MS).toFloat() / TOTAL_MS
 
     private const val OUT_TENSION = 1.6f
     private const val BACK_TENSION = 1.4f
@@ -77,36 +85,45 @@ object LiquidTimeline {
     }
 
     /**
-     * Mo shaking its body, as a dog shakes off water: -1..1, swinging five times in the middle of
-     * the roam and easing in and out. Zero before and after.
+     * When (0..1 of the roam) Mo's [move] starts: centred in the pause where it talks, which is
+     * [talkFrom]..[talkTo]. Mo stands still for it, which is what makes it look natural.
      */
-    fun shake(t: Float): Float {
-        val v = (roamProgress(t) - SHAKE_FROM) / SHAKE_LENGTH
+    fun moveStart(talkFrom: Float, talkTo: Float, move: MidMove): Float {
+        val length = (if (move == MidMove.YAWN) YAWN_MS else SHAKE_MS) / ROAM_MS.toFloat()
+        return (talkFrom + talkTo) / 2f - length / 2f
+    }
+
+    /**
+     * Mo shaking its body, as a dog shakes off water: -1..1, swinging five times over [SHAKE_MS],
+     * easing in and out, in the middle of the talking pause. Zero before and after.
+     */
+    fun shake(t: Float, talkFrom: Float, talkTo: Float): Float {
+        val length = SHAKE_MS / ROAM_MS.toFloat()
+        val v = (roamProgress(t) - moveStart(talkFrom, talkTo, MidMove.SHAKE)) / length
         if (v <= 0f || v >= 1f) return 0f
         return sin(PI.toFloat() * v) * sin(2f * PI.toFloat() * 5f * v)
     }
 
     /**
-     * How visible the "how are you doing?" bubble is, 0..1: it fades in just before Mo shakes, stays
-     * while it does, and fades out after.
+     * How visible Mo's line is, 0..1: it fades in as Mo settles at its talking stop, stays while Mo
+     * does its move, and fades out before Mo moves on. Zero everywhere else.
      */
-    fun bubbleAlpha(t: Float): Float {
-        val u = roamProgress(t)
+    fun bubbleAlpha(t: Float, talkFrom: Float, talkTo: Float): Float {
         if (!isFree(t)) return 0f
+        val u = roamProgress(t)
+        val fade = BUBBLE_FADE_MS / ROAM_MS.toFloat()
         return when {
-            u < BUBBLE_IN -> 0f
-            u < BUBBLE_IN + BUBBLE_FADE -> (u - BUBBLE_IN) / BUBBLE_FADE
-            u < BUBBLE_OUT -> 1f
-            u < BUBBLE_OUT + BUBBLE_FADE -> 1f - (u - BUBBLE_OUT) / BUBBLE_FADE
-            else -> 0f
+            u < talkFrom || u >= talkTo -> 0f
+            u < talkFrom + fade -> (u - talkFrom) / fade
+            u < talkTo - fade -> 1f
+            else -> (talkTo - u) / fade
         }
     }
 
-    private const val SHAKE_FROM = 0.40f
-    private const val SHAKE_LENGTH = 0.20f
-    private const val BUBBLE_IN = 0.30f
-    private const val BUBBLE_OUT = 0.64f
-    private const val BUBBLE_FADE = 0.06f
+    /** Mo's shake lasts this long, and its yawn is Mo's own 1.6 s one. */
+    const val SHAKE_MS = 1_200L
+    const val YAWN_MS = 1_600L
+    private const val BUBBLE_FADE_MS = 400L
 
     /** 0 at the start, 1 at the end, past 1 in between: the same curve as Android's OvershootInterpolator. */
     fun overshoot(t: Float, tension: Float): Float {

@@ -32,9 +32,10 @@ import kotlin.random.Random
 
 /**
  * Experimental. Mo is pushed out of the island inside a drop of liquid; the drop pops and Mo is out
- * completely, roams the whole screen along a random route, shakes its body and says how it feels;
- * then a new drop forms around Mo and the island pulls it back in. See [LiquidTimeline] for the
- * sequence and [RoamPath] for the route.
+ * completely and wanders the whole screen, going somewhere, staying a while, then going somewhere
+ * else, with a different random plan every time; at its second stop it stands still, shakes its body
+ * (or yawns) and says how it feels; then a new drop forms around Mo and the island pulls it back in.
+ * See [LiquidTimeline] for the sequence and [RoamPlan] for the wandering.
  *
  * It is a second, see-through, full-screen window drawn over the island's own window, which stays
  * as it is. Touches pass straight through it. It draws a thin black strip along the island's bottom
@@ -92,13 +93,15 @@ class LiquidIsland(
 
         // Anywhere on the screen, clear of the edges, the island, and the gesture bar.
         val edge = moSize / 2f + dp(8)
-        val path = RoamPath.random(
+        val plan = RoamPlan.random(
             Random(seed),
             start = Pt(outX, outY),
             minX = edge,
             maxX = screenW - edge,
             minY = pill.bottom + moSize / 2f + dp(16),
             maxY = screenH - moSize / 2f - dp(96),
+            roamMs = LiquidTimeline.ROAM_MS.toFloat(),
+            unit = density,
         )
 
         // What Mo says goes in a bubble beside it, drawn the way Mo's other bubbles are.
@@ -169,7 +172,7 @@ class LiquidIsland(
         running = true
         var realMoHidden = false
         var waved = false
-        var glancedAt = 0
+        var nextArrival = 0
         var shook = false
         val move = LiquidTimeline.midMove(mood)
         var lastX = outX
@@ -191,8 +194,8 @@ class LiquidIsland(
             addUpdateListener { va ->
                 val t = va.animatedFraction
                 val p = LiquidTimeline.position(t)
-                // Out from the island, then along the random route, then home and back in.
-                val at = if (LiquidTimeline.isFree(t)) path.at(LiquidTimeline.roamProgress(t)) else Pt(outX, outY)
+                // Out from the island, then wandering (travel, stay, travel...), then home and back in.
+                val at = if (LiquidTimeline.isFree(t)) plan.at(LiquidTimeline.roamProgress(t)) else Pt(outX, outY)
                 val x = at.x
                 val y = cyIn + (outY - cyIn) * p + (at.y - outY)
                 // The drop: around Mo while it comes out, then it pops back into the island's edge so Mo
@@ -204,15 +207,16 @@ class LiquidIsland(
                 mo.translationX = x - moSize / 2f
                 mo.translationY = y - moSize / 2f
                 // Leans into the way it is going, and straightens up as it slows.
+                // (Standing still it straightens up; moving it leans into the way it goes.)
                 lean += ((x - lastX) * 0.6f - lean) * 0.2f
                 lastX = x
-                // A shake of the whole body, from side to side, in the middle of the roam.
-                val shake = if (move == LiquidTimeline.MidMove.SHAKE) LiquidTimeline.shake(t) else 0f
+                // A shake of the whole body, from side to side, while it stands at its talking stop.
+                val shake = if (move == LiquidTimeline.MidMove.SHAKE) LiquidTimeline.shake(t, plan.talkFrom, plan.talkTo) else 0f
                 mo.rotation = lean.coerceIn(-12f, 12f) + 14f * shake
                 mo.translationX += dp(2) * shake
                 // What Mo says, beside it, following it, fading in and out; above it near the bottom of the screen.
                 bubble?.let {
-                    it.alpha = LiquidTimeline.bubbleAlpha(t)
+                    it.alpha = LiquidTimeline.bubbleAlpha(t, plan.talkFrom, plan.talkTo)
                     it.translationX = (x - bubbleW / 2f).coerceIn(dp(8).toFloat(), (screenW - bubbleW - dp(8)).toFloat())
                     val below = y + moSize / 2f + dp(8) + bubbleH + dp(24) <= screenH
                     it.translationY = if (below) y + moSize / 2f + dp(8) else y - moSize / 2f - dp(8) - bubbleH
@@ -228,18 +232,16 @@ class LiquidIsland(
                     waved = true
                     mo.react(intensity = 0.9f, excited = move != LiquidTimeline.MidMove.YAWN)
                 }
-                // A look around, a happy shake (or a big yawn, when sleepy) in the middle, another look around.
-                if (glancedAt == 0 && u >= 0.22f) {
-                    glancedAt = 1
+                // A look around each time it arrives somewhere new, a moment after it settles.
+                val lookAfter = 0.4f * 1000f / LiquidTimeline.ROAM_MS
+                if (nextArrival < plan.arrivals.size && u >= plan.arrivals[nextArrival] + lookAfter) {
+                    nextArrival++
                     mo.glance()
                 }
-                if (!shook && u >= 0.40f) {
+                // At its talking stop: a happy shake, or a big yawn when sleepy.
+                if (!shook && u >= LiquidTimeline.moveStart(plan.talkFrom, plan.talkTo, move)) {
                     shook = true
                     if (move == LiquidTimeline.MidMove.YAWN) mo.stretch() else mo.react(intensity = 0.6f, excited = true)
-                }
-                if (glancedAt == 1 && u >= 0.72f) {
-                    glancedAt = 2
-                    mo.glance()
                 }
             }
             addListener(object : AnimatorListenerAdapter() {

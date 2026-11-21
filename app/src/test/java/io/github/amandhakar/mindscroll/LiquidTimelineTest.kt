@@ -59,10 +59,18 @@ class LiquidTimelineTest {
 
     private fun atU(u: Float) = LiquidTimeline.POP_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.POP_END)
 
+    // A talking stop like a real plan's: about 2.9 s of the 13 s roam.
+    private val talkFrom = 0.35f
+    private val talkTo = 0.57f
+
     @Test
-    fun shakesItsBodyOnlyInTheMiddleOfTheRoam() {
-        for (u in listOf(0f, 0.1f, 0.3f, 0.39f, 0.61f, 0.8f, 1f)) assertEquals("u=$u", 0f, LiquidTimeline.shake(atU(u)), eps)
-        val shake = (400..600).map { LiquidTimeline.shake(atU(it / 1000f)) }
+    fun shakesItsBodyOnlyWhileItStandsAtTheTalkingStop() {
+        val mid = (talkFrom + talkTo) / 2f
+        val half = LiquidTimeline.SHAKE_MS / LiquidTimeline.ROAM_MS.toFloat() / 2f
+        for (u in listOf(0f, 0.1f, 0.3f, talkFrom, mid - half - 0.01f, mid + half + 0.01f, talkTo, 0.8f, 1f)) {
+            assertEquals("u=$u", 0f, LiquidTimeline.shake(atU(u), talkFrom, talkTo), eps)
+        }
+        val shake = (0..1000).map { LiquidTimeline.shake(atU(mid - half + it / 1000f * 2f * half), talkFrom, talkTo) }
         assertTrue("swings one way", shake.min() < -0.5f)
         assertTrue("and the other", shake.max() > 0.5f)
         assertTrue(shake.all { it in -1f..1f })
@@ -72,21 +80,44 @@ class LiquidTimelineTest {
     }
 
     @Test
-    fun asksHowYouAreDoingWhileItShakes() {
-        assertEquals(0f, LiquidTimeline.bubbleAlpha(0f), eps)
-        assertEquals(0f, LiquidTimeline.bubbleAlpha(LiquidTimeline.OUT_END), eps) // still in the drop
-        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(0.1f)), eps)
-        assertEquals(1f, LiquidTimeline.bubbleAlpha(atU(0.5f)), eps)
-        assertEquals(1f, LiquidTimeline.bubbleAlpha(atU(0.45f)), eps) // fully there as the shake begins
-        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(0.8f)), eps)
-        assertEquals(0f, LiquidTimeline.bubbleAlpha(1f), eps)
+    fun theMoveIsCentredInTheTalkingPauseAndAYawnIsLongerThanAShake() {
+        val mid = (talkFrom + talkTo) / 2f
+        val shake = LiquidTimeline.moveStart(talkFrom, talkTo, LiquidTimeline.MidMove.SHAKE)
+        val yawn = LiquidTimeline.moveStart(talkFrom, talkTo, LiquidTimeline.MidMove.YAWN)
+        assertTrue(shake > talkFrom && yawn > talkFrom)
+        assertTrue(yawn < shake) // a longer move starts earlier, to end in the same place
+        assertEquals(mid, shake + LiquidTimeline.SHAKE_MS / LiquidTimeline.ROAM_MS.toFloat() / 2f, eps)
+        assertEquals(mid, yawn + LiquidTimeline.YAWN_MS / LiquidTimeline.ROAM_MS.toFloat() / 2f, eps)
+        // Both fit inside the pause.
+        assertTrue(yawn + LiquidTimeline.YAWN_MS / LiquidTimeline.ROAM_MS.toFloat() < talkTo)
     }
 
     @Test
-    fun theQuestionFadesInThenOutWithoutJumping() {
-        val alphas = (0..1000).map { LiquidTimeline.bubbleAlpha(atU(it / 1000f)) }
+    fun mosLineIsOnlyUpWhileItStandsAtTheTalkingStop() {
+        val mid = (talkFrom + talkTo) / 2f
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(0f, talkFrom, talkTo), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(LiquidTimeline.OUT_END, talkFrom, talkTo), eps) // still in the drop
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(0.1f), talkFrom, talkTo), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(talkFrom - 0.01f), talkFrom, talkTo), eps)
+        assertEquals(1f, LiquidTimeline.bubbleAlpha(atU(mid), talkFrom, talkTo), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(talkTo + 0.01f), talkFrom, talkTo), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(atU(0.9f), talkFrom, talkTo), eps)
+        assertEquals(0f, LiquidTimeline.bubbleAlpha(1f, talkFrom, talkTo), eps)
+    }
+
+    @Test
+    fun theLineFadesInThenOutWithoutJumping() {
+        val alphas = (0..2000).map { LiquidTimeline.bubbleAlpha(atU(it / 2000f), talkFrom, talkTo) }
         assertTrue(alphas.all { it in 0f..1f })
         for (i in 0 until alphas.lastIndex) assertTrue("jump at $i", kotlin.math.abs(alphas[i + 1] - alphas[i]) < 0.05f)
+        assertTrue(alphas.max() == 1f)
+    }
+
+    @Test
+    fun theWholeThingTakesAboutThirteenSecondsOfRoaming() {
+        assertEquals(13_000L, LiquidTimeline.ROAM_MS)
+        val roamed = (LiquidTimeline.HOLD_END - LiquidTimeline.POP_END) * LiquidTimeline.TOTAL_MS
+        assertTrue("roams for $roamed ms", kotlin.math.abs(roamed - LiquidTimeline.ROAM_MS) < 5f)
     }
 
     @Test
