@@ -26,8 +26,9 @@ import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
 
 /**
- * Experimental. Mo comes out of the island, roams around outside for a while to stretch a little,
- * and goes back in, and the island stretches toward Mo like a liquid and pulls it back in.
+ * Experimental. Mo is pushed out of the island inside a drop of liquid; the drop pops and Mo is out
+ * completely, roams around outside and has a stretch; then a new drop forms around Mo and the
+ * island pulls it back in. See [LiquidTimeline] for the sequence.
  *
  * It is a second, see-through window drawn over the island's own window, which stays as it is.
  * The window draws a thin black strip along the island's bottom edge (clear of the numbers) and a
@@ -68,7 +69,8 @@ class LiquidIsland(
         fun dp(v: Int) = (v * density).toInt()
 
         val margin = dp(24)
-        val radius = moSize / 2f + dp(2)
+        // The drop is a little bigger than Mo, so it reads as a bubble around it.
+        val radius = moSize / 2f + dp(5)
         val pillH = pill.height().toFloat()
         val cyIn = pillH / 2f
         // Far enough out that the blob hangs just clear of the island, joined by a thin neck.
@@ -87,6 +89,7 @@ class LiquidIsland(
         val xMax = margin + pill.width() - radius
         val xMid = (xMin + xMax) / 2f
         val reach = (xMax - xMin) / 2f * 0.85f
+        val stripMidY = pillH - dp(6)
         val goo = GooView(context).also { it.setGeometry(strip, cx, cyIn, radius, radius) }
         val mo = MoView(context).apply {
             this.mood = mood
@@ -156,12 +159,16 @@ class LiquidIsland(
                 // left and right, sinking and rising, and back to its own spot before it is pulled in.
                 val x = (cx + (xMid - cx) * roam.envelope + reach * roam.wander).coerceIn(xMin, xMax)
                 val cy = cyIn + (cyOut - cyIn) * p + bobPx * roam.bob
-                // The blob swells a little when Mo stretches.
-                val rx = radius * (1f - 0.06f * roam.stretch)
-                val ry = radius * (1f + 0.10f * roam.stretch)
-                goo.setGeometry(strip, x, cy, rx, ry)
+                // The drop: around Mo while it comes out, then it pops back into the island's edge so Mo
+                // is free, and a new one forms around Mo as it comes back.
+                val drop = LiquidTimeline.drop(t)
+                val dropY = stripMidY + (cy - stripMidY) * drop.attach
+                goo.setGeometry(strip, x, dropY, radius * drop.scale, radius * drop.scale)
                 mo.translationX = x - moSize / 2f
                 mo.translationY = cy - moSize / 2f
+                // A good stretch: taller and slimmer at the peak.
+                mo.scaleX = 1f - 0.08f * roam.stretch
+                mo.scaleY = 1f + 0.18f * roam.stretch
                 // Leans into the way it is going, and straightens up as it slows.
                 lean += ((x - lastX) * 2.2f - lean) * 0.2f
                 lastX = x
@@ -172,9 +179,10 @@ class LiquidIsland(
                     hideRealMo(true)
                 }
                 val u = LiquidTimeline.roamProgress(t)
-                if (!waved && LiquidTimeline.isOut(t)) {
+                // The drop pops: Mo is out completely, and pleased about it.
+                if (!waved && LiquidTimeline.isFree(t)) {
                     waved = true
-                    mo.react(intensity = 0.7f, excited = true)
+                    mo.react(intensity = 0.9f, excited = true)
                 }
                 // A look around, a good stretch in the middle, another look around.
                 if (glancedAt == 0 && u >= 0.22f) {

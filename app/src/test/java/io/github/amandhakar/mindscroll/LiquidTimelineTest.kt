@@ -57,7 +57,7 @@ class LiquidTimelineTest {
 
     // --- Roaming while out ---
 
-    private fun roamAt(u: Float) = LiquidTimeline.roam(LiquidTimeline.OUT_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.OUT_END))
+    private fun roamAt(u: Float) = LiquidTimeline.roam(LiquidTimeline.POP_END + u * (LiquidTimeline.HOLD_END - LiquidTimeline.POP_END))
 
     @Test
     fun roamsOnlyWhileOutAndReturnsToWhereItCameOut() {
@@ -94,9 +94,51 @@ class LiquidTimelineTest {
 
     @Test
     fun roamProgressRunsFromZeroToOneWhileOut() {
-        assertEquals(0f, LiquidTimeline.roamProgress(LiquidTimeline.OUT_END), eps)
+        assertEquals(0f, LiquidTimeline.roamProgress(LiquidTimeline.POP_END), eps)
         assertEquals(1f, LiquidTimeline.roamProgress(LiquidTimeline.HOLD_END), eps)
         assertEquals(0f, LiquidTimeline.roamProgress(0f), eps)
         assertEquals(1f, LiquidTimeline.roamProgress(1f), eps)
+    }
+
+    // --- The drop Mo comes out of ---
+
+    @Test
+    fun moComesOutInAWholeDropThatThenPopsSoMoIsFree() {
+        assertEquals(1f, LiquidTimeline.drop(0f).scale, eps)
+        assertEquals(1f, LiquidTimeline.drop(LiquidTimeline.OUT_END).scale, eps)
+        assertEquals(0f, LiquidTimeline.drop(LiquidTimeline.POP_END).scale, eps)
+        val mid = LiquidTimeline.drop((LiquidTimeline.OUT_END + LiquidTimeline.POP_END) / 2f)
+        assertTrue(mid.scale > 0.1f && mid.scale < 0.9f)
+        assertFalse(LiquidTimeline.isFree(LiquidTimeline.OUT_END + 0.01f))
+        assertTrue(LiquidTimeline.isFree(LiquidTimeline.POP_END))
+    }
+
+    @Test
+    fun thePoppedDropIsDrawnBackIntoTheIslandNotLeftBehindMo() {
+        val pop = (0..20).map { LiquidTimeline.drop(LiquidTimeline.OUT_END + it / 20f * (LiquidTimeline.POP_END - LiquidTimeline.OUT_END)) }
+        assertEquals(1f, pop.first().attach, eps)
+        assertEquals(0f, pop.last().attach, eps)
+        for (i in 0 until pop.lastIndex) {
+            assertTrue(pop[i + 1].attach <= pop[i].attach + eps)
+            assertTrue(pop[i + 1].scale <= pop[i].scale + eps)
+        }
+    }
+
+    @Test
+    fun noDropWhileMoRoams() {
+        for (i in 0..10) {
+            val t = LiquidTimeline.POP_END + i / 10f * (LiquidTimeline.FORM_START - LiquidTimeline.POP_END)
+            assertEquals(0f, LiquidTimeline.drop(t).scale, eps)
+        }
+    }
+
+    @Test
+    fun aNewDropFormsAroundMoWithAWobbleAsItComesBack() {
+        val form = (0..100).map { LiquidTimeline.drop(LiquidTimeline.FORM_START + it / 100f * (LiquidTimeline.HOLD_END - LiquidTimeline.FORM_START)) }
+        assertEquals(0f, form.first().scale, eps)
+        assertEquals(1f, form.last().scale, eps)
+        assertTrue("wobbles past whole", form.maxOf { it.scale } > 1.02f)
+        assertTrue(form.all { it.attach == 1f })
+        assertEquals(1f, LiquidTimeline.drop(1f).scale, eps)
     }
 }
