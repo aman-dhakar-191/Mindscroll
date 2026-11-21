@@ -80,6 +80,11 @@ class CounterOverlay(
     }
 
     private var patch: PatchViews? = null
+
+    /** Experimental: Mo comes out of the island and goes back in (see [LiquidIsland]). Made when first needed. */
+    private var liquid: LiquidIsland? = null
+    private var lastLiquidAtMs = 0L
+    private val liquidHello = Runnable { liquidEmerge("app opened", minGapMs = 20_000L) }
     private var bubble: BubbleViews? = null
     private var panel: PanelViews? = null
     private var panelClosedAt = 0L
@@ -365,6 +370,8 @@ class CounterOverlay(
 
     fun removeAll() {
         handler.removeCallbacks(endSnooze)
+        handler.removeCallbacks(liquidHello)
+        liquid?.cancel()
         handler.removeCallbacks(revealTimer)
         handler.removeCallbacks(hideTimer)
         removeSpeech()
@@ -491,6 +498,9 @@ class CounterOverlay(
         // A new session (or a new timer base) starts its own 5- or 10-minute rhythm.
         timerRevealed = false
         scheduleTimerReveal()
+        // Experimental: a moment after an app opens, Mo comes out to say hello.
+        handler.removeCallbacks(liquidHello)
+        if (newSession != null && newSession.packageName != previousPackage) handler.postDelayed(liquidHello, 1_400L)
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
             if (reaction == SessionReaction.APP_EXIT) {
@@ -741,6 +751,8 @@ class CounterOverlay(
     /** Takes the patch off screen, fading it out unless [animate] is false (shutting down). */
     private fun removePatch(animate: Boolean = true) {
         val views = patch ?: return
+        handler.removeCallbacks(liquidHello)
+        liquid?.cancel()
         patch = null
         views.timer.stop()
         views.info.stopFlipping()
@@ -964,7 +976,36 @@ class CounterOverlay(
                 else -> 0.94f
             }
             kick(mo, squash, if (repeated && playful) 1.12f else squash, hopPx = 0f, p = p)
+            // Experimental: tapping Mo in the island makes it come out for a moment.
+            if (mo === patch?.mo) liquidEmerge("tapped", minGapMs = 4_000L)
         }
+    }
+
+    /**
+     * Experimental, behind its own setting: Mo comes out of the island, hovers, and goes back in,
+     * with the island stretching like a liquid. Skipped while asleep, in a call, while Mo is
+     * speaking, while the panel is open, or if it played a moment ago.
+     */
+    private fun liquidEmerge(reason: String, minGapMs: Long) {
+        if (!display.liquidIsland) return
+        val views = patch ?: return
+        val now = SystemClock.uptimeMillis()
+        val island = liquid ?: LiquidIsland(service, windowManager).also { liquid = it }
+        if (island.running || moAsleep || inCall || speech != null || panel != null || now - lastLiquidAtMs < minGapMs) return
+        lastLiquidAtMs = now
+        val pill = Rect(views.params.x, views.params.y, views.params.x + views.params.width, views.params.y + views.params.height)
+        val moCenterX = views.params.x + views.left.left + views.left.width / 2f
+        DetectionLog.add("liquid: Mo comes out ($reason), liquid stretch ${Build.VERSION.SDK_INT >= Build.VERSION_CODES.S}")
+        val started = island.play(
+            pill = pill,
+            moCenterX = moCenterX,
+            moSize = patchMoSize(),
+            mood = state?.mood ?: Mood.CHILL,
+            profile = profile(),
+            hideRealMo = { hide -> views.mo.alpha = if (hide) 0f else 1f },
+            onEnd = {},
+        )
+        if (!started) lastLiquidAtMs = 0L
     }
 
     /**

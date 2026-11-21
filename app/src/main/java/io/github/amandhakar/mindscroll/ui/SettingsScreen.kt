@@ -42,6 +42,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
     var mascotSize by remember { mutableStateOf(settings.mascotSize) }
     var motionStyle by remember { mutableStateOf(settings.motionStyle) }
     var milestones by remember { mutableStateOf(settings.milestoneReactions) }
+    var liquidIsland by remember { mutableStateOf(settings.liquidIsland) }
 
     Scaffold(
         topBar = {
@@ -151,6 +152,20 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
             TrackedAppsCard(onOpenApps)
             SectionHeader("Mo")
             MoCard(onOpenMemories)
+            SectionHeader("Experiments")
+            Panel {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PreferenceSwitch(
+                        title = "Liquid island",
+                        subtitle = "Mo comes out of the island and goes back in, and the island stretches like a liquid. " +
+                            "Plays when an app opens and when you tap Mo. Experimental: it may look rough. The stretch needs Android 12 or newer.",
+                        checked = liquidIsland,
+                    ) {
+                        liquidIsland = it
+                        settings.liquidIsland = it
+                    }
+                }
+            }
             SectionHeader("Privacy")
             DiagnosticsCard()
             Text(

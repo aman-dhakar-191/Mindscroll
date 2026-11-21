@@ -89,6 +89,8 @@ class Settings(context: Context) {
         /** How often the timer shows over the counter in apps set to Both. Never "always". */
         val counterTimerEvery: TimerReveal = TimerReveal.EVERY_5_MIN,
         val leaveDelay: LeaveDelay = LeaveDelay.THREE_SECONDS,
+        /** Experimental: Mo comes out of the island and goes back in, with a liquid stretch. Off by default. */
+        val liquidIsland: Boolean = false,
         val character: MoCharacter = MoCharacter.MO,
         val palette: MoPalette = MoPalette.CLASSIC,
     )
@@ -153,6 +155,11 @@ class Settings(context: Context) {
         get() = runCatching { TimerReveal.valueOf(prefs.getString(KEY_COUNTER_TIMER_EVERY, TimerReveal.EVERY_5_MIN.name)!!) }
             .getOrDefault(TimerReveal.EVERY_5_MIN).takeIf { it != TimerReveal.ALWAYS } ?: TimerReveal.EVERY_5_MIN
         set(value) = prefs.edit().putString(KEY_COUNTER_TIMER_EVERY, value.name).apply()
+
+    /** Experimental (see [Display.liquidIsland]). */
+    var liquidIsland: Boolean
+        get() = prefs.getBoolean(KEY_LIQUID_ISLAND, false)
+        set(value) = prefs.edit().putBoolean(KEY_LIQUID_ISLAND, value).apply()
 
     var leaveDelay: LeaveDelay
         get() = runCatching { LeaveDelay.valueOf(prefs.getString(KEY_LEAVE_DELAY, LeaveDelay.THREE_SECONDS.name)!!) }
@@ -238,13 +245,13 @@ class Settings(context: Context) {
 
     fun display() = Display(
         cameraPatch, bubble, infoChoices(), mascotSize, motionStyle, milestoneReactions,
-        timerReveal, counterTimerEvery, leaveDelay, mascotCharacter, mascotPalette,
+        timerReveal, counterTimerEvery, leaveDelay, liquidIsland, mascotCharacter, mascotPalette,
     )
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_APP_INFO ||
-                key == KEY_COUNTER_TIMER_EVERY || key == KEY_LEAVE_DELAY || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
+                key == KEY_COUNTER_TIMER_EVERY || key == KEY_LEAVE_DELAY || key == KEY_LIQUID_ISLAND || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
                 key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE || key == KEY_TIMER_REVEAL
             ) trySend(display())
         }
@@ -263,6 +270,7 @@ class Settings(context: Context) {
         const val KEY_APP_INFO = "app_info"
         const val KEY_COUNTER_TIMER_EVERY = "counter_timer_every"
         const val KEY_LEAVE_DELAY = "leave_delay"
+        const val KEY_LIQUID_ISLAND = "liquid_island"
         const val KEY_MASCOT_SIZE = "mascot_size"
         const val KEY_MOTION_STYLE = "motion_style"
         const val KEY_MILESTONE_REACTIONS = "milestone_reactions"
