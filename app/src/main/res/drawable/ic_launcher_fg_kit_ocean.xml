@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Generated: the kit launcher icon (chill mood, Classic colours), drawn on the same grid as the in-app character. -->
+<!-- Generated: the kit launcher icon, chill mood in the ocean colours, on the same grid as the in-app character. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group android:translateX="21" android:translateY="23" android:scaleX="0.66" android:scaleY="0.66">
-        <path android:fillColor="#FF5EE6A8" android:strokeColor="#FF5EE6A8" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M18,32L20,8L44,20Z"/>
-        <path android:fillColor="#FF5EE6A8" android:strokeColor="#FF5EE6A8" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M82,32L80,8L56,20Z"/>
+        <path android:fillColor="#FF6FE8DE" android:strokeColor="#FF6FE8DE" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M18,32L20,8L44,20Z"/>
+        <path android:fillColor="#FF6FE8DE" android:strokeColor="#FF6FE8DE" android:strokeWidth="7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M82,32L80,8L56,20Z"/>
         <path android:fillColor="#FFFF8FB0" android:fillAlpha="0.75" android:pathData="M23,24L24,15L34,20Z"/>
         <path android:fillColor="#FFFF8FB0" android:fillAlpha="0.75" android:pathData="M77,24L76,15L66,20Z"/>
-        <path android:fillColor="#FF5EE6A8" android:pathData="M46,16H54A38,36 0 0 1 92,52V58A38,36 0 0 1 54,94H46A38,36 0 0 1 8,58V52A38,36 0 0 1 46,16Z"/>
+        <path android:fillColor="#FF6FE8DE" android:pathData="M46,16H54A38,36 0 0 1 92,52V58A38,36 0 0 1 54,94H46A38,36 0 0 1 8,58V52A38,36 0 0 1 46,16Z"/>
         <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.28" android:pathData="M20,30A11,6 0 1 0 42,30A11,6 0 1 0 20,30Z"/>
         <path android:strokeColor="#FF1B1B2F" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.45" android:pathData="M10,62L22,64"/>
         <path android:strokeColor="#FF1B1B2F" android:strokeWidth="2.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:strokeAlpha="0.45" android:pathData="M10,70L22,69"/>

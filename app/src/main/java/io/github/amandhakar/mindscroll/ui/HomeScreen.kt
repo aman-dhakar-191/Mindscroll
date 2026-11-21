@@ -166,11 +166,17 @@ fun HomeScreen(
             HomeTour(
                 targets = mapOf(TourStop.HERO to heroBounds, TourStop.WEEK to weekBounds, TourStop.MENU to menuBounds),
                 onStop = { stop ->
-                    when (stop) {
-                        TourStop.HERO -> scroll.animateScrollTo(0)
-                        TourStop.WEEK -> scroll.animateScrollTo(scroll.maxValue)
-                        else -> Unit
+                    val scrollTo = when (stop) {
+                        TourStop.HERO -> 0
+                        TourStop.WEEK -> scroll.maxValue
+                        else -> null
                     }
+                    if (scrollTo != null) {
+                        scroll.animateScrollTo(scrollTo)
+                    }
+                    // animateScrollTo returns a Float here; this lambda must return Unit, or the
+                    // tour crashes with "Float cannot be cast to Unit" the moment it starts.
+                    Unit
                 },
                 onFinish = onTourDone,
             )

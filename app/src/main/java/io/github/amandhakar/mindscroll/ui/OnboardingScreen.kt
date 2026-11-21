@@ -174,7 +174,7 @@ fun OnboardingScreen(
                                 palette = palette,
                                 onCharacter = {
                                     character = it
-                                    settings.chooseCharacter(context, it)
+                                    settings.chooseCharacter(it)
                                     reactions++
                                 },
                                 onPalette = {
@@ -187,7 +187,7 @@ fun OnboardingScreen(
                                 Text("That's me")
                             }
                             Text(
-                                "You can change this any time in Settings.",
+                                "The app icon follows your pick once you leave the app. You can change this any time in Settings.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

@@ -13,8 +13,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import io.github.amandhakar.mindscroll.app
+import io.github.amandhakar.mindscroll.mascot.LauncherIcon
 
 class MainActivity : ComponentActivity() {
+    /**
+     * The home-screen icon follows the user's character and colour, but only once the app is out
+     * of sight: switching it while the app is open makes some phones close the app.
+     */
+    override fun onStop() {
+        super.onStop()
+        val settings = app.settings
+        LauncherIcon.apply(this, settings.mascotCharacter, settings.mascotPalette)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

@@ -1,6 +1,5 @@
 package io.github.amandhakar.mindscroll.ui
 
-import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,16 +28,17 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.amandhakar.mindscroll.data.Settings
-import io.github.amandhakar.mindscroll.mascot.LauncherIcon
 import io.github.amandhakar.mindscroll.mascot.MoCharacter
 import io.github.amandhakar.mindscroll.mascot.MoPainter
 import io.github.amandhakar.mindscroll.mascot.MoPalette
 import io.github.amandhakar.mindscroll.mascot.Mood
 
-/** Saves the choice and swaps the launcher icon to match, so the logo is whoever was picked. */
-fun Settings.chooseCharacter(context: Context, character: MoCharacter) {
+/**
+ * Saves the choice. The launcher icon follows later, when the app is out of sight
+ * (`MainActivity.onStop`): switching it under the user's hands can close the app.
+ */
+fun Settings.chooseCharacter(character: MoCharacter) {
     mascotCharacter = character
-    runCatching { LauncherIcon.apply(context, character) }
 }
 
 /** One still [character] in [palette], at [mood]. Not animated: used for the choices. */

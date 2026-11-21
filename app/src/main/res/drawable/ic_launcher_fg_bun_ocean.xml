@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated: the bun launcher icon, chill mood in the ocean colours, on the same grid as the in-app character. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="21" android:translateY="23" android:scaleX="0.66" android:scaleY="0.66">
+        <group android:rotation="-9" android:pivotX="33" android:pivotY="28">
+            <path android:fillColor="#FF6FE8DE" android:pathData="M24.5,17A8.5,16 0 1 0 41.5,17A8.5,16 0 1 0 24.5,17Z"/>
+            <path android:fillColor="#FFFF8FB0" android:fillAlpha="0.7" android:pathData="M29.4,18A3.6,10.5 0 1 0 36.6,18A3.6,10.5 0 1 0 29.4,18Z"/>
+        </group>
+        <group android:rotation="9" android:pivotX="67" android:pivotY="28">
+            <path android:fillColor="#FF6FE8DE" android:pathData="M58.5,17A8.5,16 0 1 0 75.5,17A8.5,16 0 1 0 58.5,17Z"/>
+            <path android:fillColor="#FFFF8FB0" android:fillAlpha="0.7" android:pathData="M63.4,18A3.6,10.5 0 1 0 70.6,18A3.6,10.5 0 1 0 63.4,18Z"/>
+        </group>
+        <path android:fillColor="#FF6FE8DE" android:pathData="M44,22H56A36,34 0 0 1 92,56V60A36,34 0 0 1 56,94H44A36,34 0 0 1 8,60V56A36,34 0 0 1 44,22Z"/>
+        <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.28" android:pathData="M20,36A11,6 0 1 0 42,36A11,6 0 1 0 20,36Z"/>
+        <path android:fillColor="#FFFF8FB0" android:pathData="M46.6,66A3.4,2.6 0 1 0 53.4,66A3.4,2.6 0 1 0 46.6,66Z"/>
+        <path android:fillColor="#FFFF6E8C" android:fillAlpha="0.38" android:pathData="M15,69A7,4.5 0 1 0 29,69A7,4.5 0 1 0 15,69Z"/>
+        <path android:fillColor="#FFFF6E8C" android:fillAlpha="0.38" android:pathData="M71,69A7,4.5 0 1 0 85,69A7,4.5 0 1 0 71,69Z"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M28,59Q35,47 42,59"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M58,59Q65,47 72,59"/>
+        <path android:strokeColor="#FF1B1B2F" android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M38,74Q50,86 62,74"/>
+    </group>
+</vector>
