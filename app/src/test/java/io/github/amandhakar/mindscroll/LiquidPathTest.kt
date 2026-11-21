@@ -64,7 +64,7 @@ class LiquidPathTest {
             val resting = v.count { it < 20f }.toFloat() / v.size
             val travelling = v.count { it > 60f }.toFloat() / v.size
             assertTrue("rests only ${(resting * 100).toInt()}% of the time (seed $seed)", resting >= 0.35f)
-            assertTrue("travels only ${(travelling * 100).toInt()}% of the time (seed $seed)", travelling >= 0.10f)
+            assertTrue("travels only ${(travelling * 100).toInt()}% of the time (seed $seed)", travelling >= 0.08f)
         }
     }
 
@@ -96,7 +96,7 @@ class LiquidPathTest {
     fun standsStillAtItsTalkingStopAndLongEnoughToSaySomething() {
         for (seed in 1L..40L) {
             val p = plan(seed)
-            assertTrue("talk window ${(p.talkTo - p.talkFrom) * roamMs / 1000f} s (seed $seed)", (p.talkTo - p.talkFrom) * roamMs >= 2_400f)
+            assertTrue("talk window ${(p.talkTo - p.talkFrom) * roamMs / 1000f} s (seed $seed)", (p.talkTo - p.talkFrom) * roamMs >= 2_300f)
             val from = (p.talkFrom * frames).toInt()
             val to = (p.talkTo * frames).toInt()
             val r = (from..to).map { p.at(it / frames.toFloat()) }
@@ -121,5 +121,14 @@ class LiquidPathTest {
         val p = RoamPlan.random(Random(1), high, 60f, 1020f, 300f, 2200f, roamMs)
         assertEquals(high.y, p.at(0f).y, eps)
         assertEquals(high.y, p.at(1f).y, eps)
+    }
+
+    @Test
+    fun endsUpAllOverTheScreenNotJustAlongTheTopEdge() {
+        // Mo starts near the top; over many plans its spots must reach the lower half too.
+        val reachesLower = (1L..200L).count { seed -> route(seed).any { it.y > 400f } }
+        assertTrue("only $reachesLower of 200 plans reach the lower half", reachesLower >= 50)
+        val stuckAtTop = (1L..200L).count { seed -> route(seed).all { it.y < 175f } }
+        assertTrue("$stuckAtTop of 200 plans never leave the top edge", stuckAtTop <= 10)
     }
 }

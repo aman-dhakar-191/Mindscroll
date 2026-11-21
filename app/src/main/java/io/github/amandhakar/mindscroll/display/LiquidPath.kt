@@ -13,7 +13,7 @@ data class Pt(val x: Float, val y: Float)
  * How Mo wanders the screen, the way a person does: goes somewhere, stays there a while, then
  * goes somewhere else, and finally heads home. A new random plan every time.
  *
- * - Mo **travels** to a spot along a gentle arc (never a straight line), slow off the mark, quicker
+ * - Mo **travels** to a spot (a stroll away, towards somewhere random on the screen) along a gentle arc (never a straight line), slow off the mark, quicker
  *   in the middle, slowing in, with a small sideways wobble. It overshoots the spot a little and
  *   settles back, like something that has just stopped.
  * - Then it **stays** a while: a slow, small drift and bob, as if it can't quite keep still, easing
@@ -106,8 +106,8 @@ class RoamPlan private constructor(
         private const val TALK_STAY_MS = 3_300f
         private const val TALK_MARGIN_S = 0.30f
         /** Mo wanders in hops of this many dp: a stroll, not a leap across the screen. */
-        private const val HOP_MIN_DP = 110f
-        private const val HOP_MAX_DP = 300f
+        private const val HOP_MIN_DP = 130f
+        private const val HOP_MAX_DP = 360f
         private const val MAX_SPOTS = 5
         private const val WOBBLE_DP = 3.5f
         private const val SETTLE_DP = 7f
@@ -186,13 +186,25 @@ class RoamPlan private constructor(
             return RoamPlan(legs, roamMs, lowX, highX, lowY, highY, unit, talkLeg.travelEnd + margin, talkLeg.dwellEnd - margin)
         }
 
-        /** A spot a stroll away from [here], in a random direction, kept on the screen. */
+        /**
+         * A spot a stroll away from [here], towards a random place on the screen, so that over a few
+         * hops Mo ends up all over it instead of piling up against the edge it started near.
+         */
         private fun hop(random: Random, here: Pt, min: Float, max: Float, lowX: Float, highX: Float, lowY: Float, highY: Float): Pt {
-            val angle = random.nextFloat() * 2f * PI.toFloat()
-            val distance = min + random.nextFloat() * (max - min)
+            val targetX = lowX + random.nextFloat() * (highX - lowX)
+            val targetY = lowY + random.nextFloat() * (highY - lowY)
+            var vx = targetX - here.x
+            var vy = targetY - here.y
+            var length = hypot(vx, vy)
+            if (length < 1e-3f) {
+                vx = 1f
+                vy = 0f
+                length = 1f
+            }
+            val distance = length.coerceIn(min, min + random.nextFloat() * (max - min))
             return Pt(
-                (here.x + kotlin.math.cos(angle) * distance).coerceIn(lowX, highX),
-                (here.y + sin(angle) * distance).coerceIn(lowY, highY),
+                (here.x + vx / length * distance).coerceIn(lowX, highX),
+                (here.y + vy / length * distance).coerceIn(lowY, highY),
             )
         }
 
