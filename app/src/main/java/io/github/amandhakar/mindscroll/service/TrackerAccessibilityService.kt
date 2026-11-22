@@ -45,12 +45,14 @@ class TrackerAccessibilityService : AccessibilityService() {
     private lateinit var appSessions: AppSessionWatcher
     private lateinit var brain: MoBrain
     private lateinit var calls: CallWatcher
+    private val life by lazy { ServiceLife(this) }
     private val hosts = mutableMapOf<String, TrackerHost>()
     private val diagnosticEventCounts = mutableMapOf<String, Int>()
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         FirebaseCrashlytics.getInstance().log("Accessibility service connected")
+        life.connected()
         FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_connected", null)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
@@ -154,6 +156,7 @@ class TrackerAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        life.alive()
         val packageName = event.packageName?.toString()
         if (::appSessions.isInitialized) packageName?.let { appSessions.onAppEvent(it) }
         if (packageName != null && TrackedApps.packages.value.contains(packageName)) {
@@ -190,11 +193,19 @@ class TrackerAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        life.interrupted()
         FirebaseCrashlytics.getInstance().log("Accessibility service interrupted by system")
         FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_interrupted", null)
     }
 
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        life.stopped("unbound by the system")
+        FirebaseCrashlytics.getInstance().log("Accessibility service unbound")
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
+        life.stopped("destroyed")
         FirebaseCrashlytics.getInstance().log("Accessibility service destroyed")
         FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_destroyed", null)
         // Saves unsaved screen time (on the app scope, which outlives this service).
