@@ -2,9 +2,10 @@ name: Island Lab
 
 # Actions -> Island Lab -> Run workflow.
 # Builds the small Island Lab test app (its own package, io.github.amandhakar.islandlab) and
-# publishes it as a GitHub *pre-release* tagged island-lab-<run number>. It never uses a vX.Y.Z tag,
-# so it cannot change Mindscroll's version numbers, and being a pre-release it is not the
-# repository's "latest release".
+# publishes it as a GitHub *pre-release* tagged islandlab-v0.1.<run number> (the private app store
+# finds it by the "islandlab-v" prefix, and the tag matches the app's versionName). It never uses a
+# vX.Y.Z tag, so it cannot change Mindscroll's version numbers, and being a pre-release it is not
+# the repository's "latest release".
 on:
   workflow_dispatch:
 
@@ -41,18 +42,18 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           export KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
           ./gradlew --no-daemon :islandlab:assembleRelease \
-            -PversionName="0.${{ github.run_number }}" \
+            -PversionName="0.1.${{ github.run_number }}" \
             -PversionCode="${{ github.run_number }}"
           rm "$RUNNER_TEMP/release.jks"
           mkdir -p dist
-          cp islandlab/build/outputs/apk/release/islandlab-release.apk "dist/island-lab-0.${{ github.run_number }}.apk"
+          cp islandlab/build/outputs/apk/release/islandlab-release.apk "dist/island-lab-0.1.${{ github.run_number }}.apk"
 
       - name: Publish pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: island-lab-${{ github.run_number }}
+          tag_name: islandlab-v0.1.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          name: Island Lab 0.${{ github.run_number }} (test app, not Mindscroll)
+          name: Island Lab 0.1.${{ github.run_number }} (test app, not Mindscroll)
           body: "A small test app for the phone's own island / Live Update chip. It is not Mindscroll."
           prerelease: true
           make_latest: false
