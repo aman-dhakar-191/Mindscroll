@@ -10,6 +10,7 @@ import io.github.amandhakar.mindscroll.data.MoMemoryStore
 import io.github.amandhakar.mindscroll.data.MoPrefs
 import io.github.amandhakar.mindscroll.data.Settings
 import io.github.amandhakar.mindscroll.display.CounterNotification
+import io.github.amandhakar.mindscroll.service.ServiceLife
 import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.reels.ReelApps
@@ -38,6 +39,7 @@ class MindscrollApp : Application() {
             runCatching { crashFile().writeText("${java.util.Date()}\n${error.stackTraceToString()}") }
             previous?.uncaughtException(thread, error)
         }
+        ServiceLife(this).replayInto(DetectionLog)
         crashFile().takeIf { it.exists() }?.let { DetectionLog.add("LAST CRASH: ${it.readText()}") }
         val diagnosticsEnabled = settings.diagnosticsEnabled
         FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(diagnosticsEnabled)

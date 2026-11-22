@@ -10,6 +10,7 @@ import io.github.amandhakar.mindscroll.tracker.DetectionLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.Executors
 
 /**
  * Tracks which watched app is in use right now, for the live timer in the camera patch, and
@@ -30,16 +31,36 @@ class AppSessionWatcher(
 
     private var checkScheduled = false
     private var lastFlushAt = SystemClock.elapsedRealtime()
+    @Volatile private var stopped = false
+
+    /**
+     * Asking the system which app is in front is a call that waits for the answer, up to five seconds
+     * when the app in front is slow. That wait must never be on the main thread, which is also where
+     * the island and the screen live: it is asked here, and the answer is handled back on the main
+     * thread (all the session state stays there).
+     */
+    private val asker = Executors.newSingleThreadExecutor { r -> Thread(r, "mindscroll-front-app").apply { isDaemon = true } }
 
     private val check = object : Runnable {
         override fun run() {
             checkScheduled = false
-            val front = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
-            val now = SystemClock.elapsedRealtime()
-            sessions.onCheck(front, power.isInteractive, now)
-            if (sessions.current == null || now - lastFlushAt >= FLUSH_MS) flush(now)
-            publish()
+            if (stopped) return
+            // The next check is scheduled when this answer has been handled, so slow answers never pile up.
+            runCatching {
+                asker.execute {
+                    val front = runCatching { service.rootInActiveWindow?.packageName?.toString() }.getOrNull()
+                    handler.post { onFront(front) }
+                }
+            }
         }
+    }
+
+    private fun onFront(front: String?) {
+        if (stopped) return
+        val now = SystemClock.elapsedRealtime()
+        sessions.onCheck(front, power.isInteractive, now)
+        if (sessions.current == null || now - lastFlushAt >= FLUSH_MS) flush(now)
+        publish()
     }
 
     /** How long after leaving an app its session ends (see [AppSessions.setLeaveDelay]). */
@@ -66,8 +87,10 @@ class AppSessionWatcher(
 
     /** Stops checking and saves whatever time hasn't been saved yet. */
     fun stop() {
+        stopped = true
         handler.removeCallbacks(check)
         checkScheduled = false
+        asker.shutdown()
         flush(SystemClock.elapsedRealtime())
     }
 

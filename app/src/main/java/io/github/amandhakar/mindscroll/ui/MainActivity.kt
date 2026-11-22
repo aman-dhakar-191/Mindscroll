@@ -22,6 +22,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStop() {
         super.onStop()
+        com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().log("MainActivity stopped")
         val settings = app.settings
         LauncherIcon.apply(this, settings.mascotCharacter, settings.mascotPalette)
     }
