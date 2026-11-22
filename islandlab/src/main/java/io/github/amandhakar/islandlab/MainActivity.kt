@@ -71,6 +71,13 @@ class MainActivity : Activity() {
         column.addView(button("A. Live Update + timer (like Mindscroll)") { post(ID_A, "A", promoted = true, chronometer = true, shortText = null) })
         column.addView(button("B. Live Update + timer + short text \"22m\"") { post(ID_B, "B", promoted = true, chronometer = true, shortText = "22m") })
         column.addView(button("C. Plain ongoing notification (to compare)") { post(ID_C, "C", promoted = false, chronometer = true, shortText = null) })
+        column.addView(text("Animation tests (each runs about 8 s; record the screen to see them):", 14f))
+        column.addView(button("D1. Icon flip-book, 2 updates/s") { flipBook("D1", 2) })
+        column.addView(button("D2. Icon flip-book, 5 updates/s") { flipBook("D2", 5) })
+        column.addView(button("D3. Icon flip-book, 10 updates/s") { flipBook("D3", 10) })
+        column.addView(button("E. Text changes every second") { ticking("E") })
+        column.addView(button("F. Progress bar Live Update (moves every second)") { progress("F") })
+        column.addView(button("H. Two Live Updates at once") { two("H") })
         column.addView(button("Remove all tests") { removeAll() })
 
         column.addView(text("3. Look at the camera area and the status bar, then copy the log and send it with a screenshot.", 14f))
@@ -151,6 +158,135 @@ class MainActivity : Activity() {
         }.onFailure { addLog("$label: failed: ${it.javaClass.simpleName}: ${it.message}") }
     }
 
+    /** Runs [start] now, or after 8 s when the switch is on so there is time to open another app. */
+    private fun later(label: String, start: () -> Unit) {
+        if (waitFirst.isChecked) {
+            addLog("$label: starting in 8 s, switch to another app now")
+            handler.postDelayed(start, 8_000L)
+        } else {
+            start()
+        }
+    }
+
+    private fun manager(): NotificationManager {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Island Lab", NotificationManager.IMPORTANCE_DEFAULT))
+        return manager
+    }
+
+    /** The same notification as test A, with the parts the animation tests change. */
+    private fun liveUpdate(icon: Icon, title: String, shortText: String?, style: Notification.Style? = null): Notification {
+        val extras = Bundle().apply {
+            putBoolean("android.requestPromotedOngoing", true)
+            if (shortText != null) putCharSequence("android.shortCriticalText", shortText)
+        }
+        return Notification.Builder(this, CHANNEL)
+            .setSmallIcon(icon)
+            .setContentTitle(title)
+            .setContentText("22 min in Instagram")
+            .setStyle(style ?: Notification.BigTextStyle().bigText("22 min in Instagram · 187 reels today"))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_STATUS)
+            .setWhen(System.currentTimeMillis() - 22 * 60_000L)
+            .setUsesChronometer(true)
+            .setShowWhen(true)
+            .addExtras(extras)
+            .build()
+    }
+
+    /** Posts the notification again with a new small icon every 1000/[perSecond] ms, for 8 s. */
+    private fun flipBook(label: String, perSecond: Int) = later(label) {
+        val total = perSecond * 8
+        var frame = 0
+        val started = System.currentTimeMillis()
+        val tick = object : Runnable {
+            override fun run() {
+                if (frame >= total) {
+                    addLog("$label: done, $total updates in ${System.currentTimeMillis() - started} ms")
+                    return
+                }
+                runCatching { manager().notify(ID_D, liveUpdate(frameIcon(frame), "Instagram · 187 reels today", null)) }
+                    .onFailure { addLog("$label: failed: ${it.javaClass.simpleName}"); return }
+                frame++
+                handler.postDelayed(this, 1000L / perSecond)
+            }
+        }
+        addLog("$label: running")
+        handler.post(tick)
+    }
+
+    /** The title and the chip text change every second for 10 s. */
+    private fun ticking(label: String) = later(label) {
+        var second = 0
+        val tick = object : Runnable {
+            override fun run() {
+                if (second > 10) { addLog("$label: done"); return }
+                runCatching {
+                    manager().notify(ID_E, liveUpdate(countIcon(187), "Instagram · reel ${187 + second}", "${187 + second}"))
+                }.onFailure { addLog("$label: failed: ${it.javaClass.simpleName}"); return }
+                second++
+                handler.postDelayed(this, 1000L)
+            }
+        }
+        addLog("$label: running")
+        handler.post(tick)
+    }
+
+    /** A progress-style Live Update (Android 16) whose progress moves every second for 10 s. */
+    private fun progress(label: String) = later(label) {
+        var second = 0
+        val tick = object : Runnable {
+            override fun run() {
+                if (second > 10) { addLog("$label: done"); return }
+                runCatching {
+                    val style = Notification.ProgressStyle()
+                        .setStyledByProgress(true)
+                        .setProgress(second * 10)
+                        .addProgressSegment(Notification.ProgressStyle.Segment(100))
+                    manager().notify(ID_F, liveUpdate(countIcon(187), "Instagram · ${second * 10}%", "${second * 10}%", style))
+                }.onFailure { addLog("$label: failed: ${it.javaClass.simpleName}: ${it.message}"); return }
+                second++
+                handler.postDelayed(this, 1000L)
+            }
+        }
+        addLog("$label: running")
+        handler.post(tick)
+    }
+
+    /** Two Live Updates at the same time, to see whether the phone stacks, swaps or lets you swipe. */
+    private fun two(label: String) = later(label) {
+        runCatching {
+            val m = manager()
+            m.notify(ID_H1, liveUpdate(countIcon(187), "Instagram · 187 reels today", "22m"))
+            m.notify(ID_H2, liveUpdate(countIcon(9), "Order arriving", "9 min"))
+            addLog("$label: posted two Live Updates")
+        }.onFailure { addLog("$label: failed: ${it.javaClass.simpleName}: ${it.message}") }
+    }
+
+    /** A ring that fills as [frame] grows, with the frame number: enough to see every update. */
+    private fun frameIcon(frame: Int): Icon {
+        val size = (24 * resources.displayMetrics.density).toInt()
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val stroke = size * 0.12f
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = stroke
+        }
+        val box = android.graphics.RectF(stroke, stroke, size - stroke, size - stroke)
+        canvas.drawArc(box, -90f, (frame % 12) * 30f + 30f, false, ring)
+        val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textAlign = Paint.Align.CENTER
+            textSize = size * 0.4f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        canvas.drawText((frame % 100).toString(), size / 2f, size / 2f - (label.descent() + label.ascent()) / 2f, label)
+        return Icon.createWithBitmap(bitmap)
+    }
+
     private fun removeAll() {
         getSystemService(NotificationManager::class.java).cancelAll()
         addLog("removed all test notifications")
@@ -198,5 +334,10 @@ class MainActivity : Activity() {
         const val ID_A = 101
         const val ID_B = 102
         const val ID_C = 103
+        const val ID_D = 104
+        const val ID_E = 105
+        const val ID_F = 106
+        const val ID_H1 = 111
+        const val ID_H2 = 112
     }
 }
