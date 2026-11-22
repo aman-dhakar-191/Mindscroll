@@ -46,6 +46,13 @@ class TrackerAccessibilityService : AccessibilityService() {
     private lateinit var brain: MoBrain
     private lateinit var calls: CallWatcher
     private val life by lazy { ServiceLife(this) }
+    private val beat = android.os.Handler(android.os.Looper.getMainLooper())
+    private val heartbeat = object : Runnable {
+        override fun run() {
+            life.alive()
+            beat.postDelayed(this, 60_000L)
+        }
+    }
     private val hosts = mutableMapOf<String, TrackerHost>()
     private val diagnosticEventCounts = mutableMapOf<String, Int>()
 
@@ -53,6 +60,8 @@ class TrackerAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         FirebaseCrashlytics.getInstance().log("Accessibility service connected")
         life.connected()
+        beat.removeCallbacks(heartbeat)
+        beat.postDelayed(heartbeat, 60_000L)
         FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_connected", null)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         overlay = CounterOverlay(this, app.settings)
@@ -156,7 +165,6 @@ class TrackerAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        life.alive()
         val packageName = event.packageName?.toString()
         if (::appSessions.isInitialized) packageName?.let { appSessions.onAppEvent(it) }
         if (packageName != null && TrackedApps.packages.value.contains(packageName)) {
@@ -205,6 +213,7 @@ class TrackerAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        beat.removeCallbacks(heartbeat)
         life.stopped("destroyed")
         FirebaseCrashlytics.getInstance().log("Accessibility service destroyed")
         FirebaseAnalytics.getInstance(this).logEvent("accessibility_service_destroyed", null)
