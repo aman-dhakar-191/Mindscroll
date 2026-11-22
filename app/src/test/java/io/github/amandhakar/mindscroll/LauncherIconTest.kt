@@ -58,4 +58,26 @@ class LauncherIconTest {
         val xml = File(main, "res/mipmap-anydpi-v26/ic_launcher.xml").readText()
         assertTrue("@drawable/ic_launcher_fg_mo_classic" in xml)
     }
+
+    @Test
+    fun nothingToDoWhenTheWantedIconIsAlreadyOn() {
+        assertTrue(LauncherIcon.plan("LauncherKitBerry", "LauncherKitBerry").isEmpty())
+    }
+
+    @Test
+    fun changingFromAKnownIconTouchesTwoAliases() {
+        val plan = LauncherIcon.plan("LauncherMoClassic", "LauncherKitBerry")
+        assertEquals(listOf("LauncherKitBerry" to true, "LauncherMoClassic" to false), plan)
+    }
+
+    @Test
+    fun whenNothingIsKnownEveryAliasIsSetOnce() {
+        val all = LauncherIcon.allAliases()
+        for (applied in listOf(null, "NotAnAlias")) {
+            val plan = LauncherIcon.plan(applied, "LauncherKitBerry")
+            assertEquals(all.size, plan.size)
+            assertEquals(listOf("LauncherKitBerry"), plan.filter { it.second }.map { it.first })
+            assertEquals(all.toSet(), plan.map { it.first }.toSet())
+        }
+    }
 }
