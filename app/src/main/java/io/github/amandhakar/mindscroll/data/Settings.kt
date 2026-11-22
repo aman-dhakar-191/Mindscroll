@@ -26,6 +26,7 @@ class Settings(context: Context) {
 
     /** How often Mo comes out of the island (the liquid island experiment), at most. */
     enum class LiquidEvery(val ms: Long) {
+        FIVE_MINUTES(5 * 60_000L),
         QUARTER_HOUR(15 * 60_000L),
         HALF_HOUR(30 * 60_000L),
         HOUR(60 * 60_000L),

@@ -87,8 +87,10 @@ class CounterOverlay(
     /** Experimental: Mo comes out of the island and goes back in (see [LiquidIsland]). Made when first needed. */
     private var liquid: LiquidIsland? = null
     private var lastLiquidAtMs = 0L
-    /** Brings Mo out when it is due (see [scheduleLiquid]). */
-    private val liquidTick = Runnable { liquidEmerge("it has been a while", minGapMs = 0L) }
+    /** Looks every few seconds, while a tracked app is open, whether Mo is due (see [syncLiquidWatch]). */
+    private val liquidTick = Runnable { liquidCheck() }
+    private var liquidWatching = false
+    private var lastLiquidSkip: String? = null
     private var bubble: BubbleViews? = null
     private var panel: PanelViews? = null
     private var panelClosedAt = 0L
@@ -141,7 +143,7 @@ class CounterOverlay(
             display.counterTimerEvery != newDisplay.counterTimerEvery || display.info != newDisplay.info
         val liquidChanged = display.liquidIsland != newDisplay.liquidIsland || display.liquidEvery != newDisplay.liquidEvery
         display = newDisplay
-        if (liquidChanged) scheduleLiquid()
+        if (liquidChanged) syncLiquidWatch()
         if (revealChanged) {
             timerRevealed = false
             scheduleTimerReveal()
@@ -376,6 +378,7 @@ class CounterOverlay(
 
     fun removeAll() {
         handler.removeCallbacks(endSnooze)
+        liquidWatching = false
         handler.removeCallbacks(liquidTick)
         liquid?.cancel()
         handler.removeCallbacks(revealTimer)
@@ -504,8 +507,9 @@ class CounterOverlay(
         // A new session (or a new timer base) starts its own 5- or 10-minute rhythm.
         timerRevealed = false
         scheduleTimerReveal()
-        // Experimental: Mo comes out when it is due, counted from the last time (at most once an hour by default).
-        if (newSession == null || newSession.packageName != previousPackage) scheduleLiquid()
+        // Experimental: the watch for when Mo is due runs whenever a tracked app is open, for every session
+        // (it used to be set up only when a different app opened, so returning to the same app lost it).
+        syncLiquidWatch()
         if (newSession == null) {
             if (hasSeenSession) lastSessionEndedAtMs = now
             if (reaction == SessionReaction.APP_EXIT) {
@@ -756,7 +760,7 @@ class CounterOverlay(
     /** Takes the patch off screen, fading it out unless [animate] is false (shutting down). */
     private fun removePatch(animate: Boolean = true) {
         val views = patch ?: return
-        handler.removeCallbacks(liquidTick)
+        // (The liquid watch keeps running: a snoozed or briefly hidden island must not lose it.)
         liquid?.cancel()
         patch = null
         views.timer.stop()
@@ -998,15 +1002,42 @@ class CounterOverlay(
     }.getOrNull()
 
     /**
-     * Plans the next time Mo comes out: the user's frequency (an hour by default) after the last
-     * time, and not sooner than a moment after the app opened. Nothing when the experiment is off or
-     * no tracked app is open.
+     * Starts or stops the watch for when Mo is due: it runs while the experiment is on and a tracked
+     * app is open, checking every few seconds (see [liquidCheck]). Safe to call as often as needed.
      */
-    private fun scheduleLiquid() {
-        handler.removeCallbacks(liquidTick)
-        if (!display.liquidIsland || session == null) return
-        val due = settings.liquidLastAt + display.liquidEvery.ms - System.currentTimeMillis()
-        handler.postDelayed(liquidTick, maxOf(LIQUID_FIRST_DELAY_MS, due))
+    private fun syncLiquidWatch() {
+        val shouldRun = display.liquidIsland && session != null
+        if (shouldRun && !liquidWatching) {
+            liquidWatching = true
+            val sinceMin = settings.liquidLastAt.takeIf { it > 0L }?.let { (System.currentTimeMillis() - it) / 60_000L }
+            DetectionLog.add(
+                "liquid: watching, Mo comes out every ${display.liquidEvery.ms / 60_000L} min " +
+                    "(last time: ${sinceMin?.let { "$it min ago" } ?: "never"})",
+            )
+            handler.postDelayed(liquidTick, LIQUID_FIRST_DELAY_MS)
+        } else if (!shouldRun && liquidWatching) {
+            liquidWatching = false
+            handler.removeCallbacks(liquidTick)
+        }
+    }
+
+    /** One look: if Mo is due, bring it out; then look again soon, for as long as the watch runs. */
+    private fun liquidCheck() {
+        if (!liquidWatching) return
+        if (!display.liquidIsland || session == null) {
+            liquidWatching = false
+            return
+        }
+        val dueIn = LiquidSchedule.dueInMs(settings.liquidLastAt, display.liquidEvery.ms, System.currentTimeMillis())
+        if (dueIn == 0L) liquidEmerge("it has been ${display.liquidEvery.ms / 60_000L} min or more", minGapMs = 0L)
+        handler.postDelayed(liquidTick, LIQUID_CHECK_MS)
+    }
+
+    /** Says why Mo is due but waiting, once per reason, so the detection log doesn't fill up. */
+    private fun liquidSkip(reason: String) {
+        if (reason == lastLiquidSkip) return
+        lastLiquidSkip = reason
+        DetectionLog.add("liquid: due, but waiting ($reason)")
     }
 
     /** The whole screen, including the bars, in pixels. */
@@ -1015,26 +1046,33 @@ class CounterOverlay(
         else service.resources.displayMetrics.let { Rect(0, 0, it.widthPixels, it.heightPixels) }
 
     /**
-     * Experimental, behind its own setting: Mo comes out of the island in a drop, roams the whole
-     * screen along a random route, shakes its body and says how it feels, then goes back in. Skipped
-     * while asleep, in a call, while Mo is speaking or the panel is open (it tries again a little
-     * later), or if it played a moment ago.
+     * Experimental, behind its own setting: Mo comes out of the island in a drop, wanders the whole
+     * screen, says how it feels, then goes back in. Skipped (and the watch looks again in a few seconds)
+     * while asleep, in a call, while Mo is speaking or the panel is open, or if it played a moment ago.
      */
     private fun liquidEmerge(reason: String, minGapMs: Long) {
         if (!display.liquidIsland) return
         val views = patch ?: run {
-            // The island isn't up (snoozed, say): try again soon, if this was the scheduled one.
-            if (minGapMs == 0L && session != null) handler.postDelayed(liquidTick, LIQUID_RETRY_MS)
+            liquidSkip("the island isn't showing")
             return
         }
         val now = SystemClock.uptimeMillis()
         val island = liquid ?: LiquidIsland(service, windowManager).also { liquid = it }
         if (now - lastLiquidAtMs < minGapMs) return
-        if (island.running || moAsleep || inCall || speech != null || panel != null) {
-            // Not a good moment: try again soon, if this was the scheduled one.
-            if (minGapMs == 0L && session != null) handler.postDelayed(liquidTick, LIQUID_RETRY_MS)
+        val notNow = when {
+            island.running -> "Mo is already out"
+            moAsleep -> "Mo is asleep"
+            inCall -> "you are on a call"
+            speech != null -> "Mo is speaking"
+            panel != null -> "the details panel is open"
+            else -> null
+        }
+        if (notNow != null) {
+            // The watch looks again in a few seconds.
+            liquidSkip(notNow)
             return
         }
+        lastLiquidSkip = null
         lastLiquidAtMs = now
         val pill = Rect(views.params.x, views.params.y, views.params.x + views.params.width, views.params.y + views.params.height)
         val moCenterX = views.params.x + views.left.left + views.left.width / 2f
@@ -1057,9 +1095,8 @@ class CounterOverlay(
             onEnd = {},
         )
         if (started) {
-            settings.liquidLastAt = System.currentTimeMillis()
             // Counted from now: the next time Mo is due is a whole interval away.
-            scheduleLiquid()
+            settings.liquidLastAt = System.currentTimeMillis()
         } else {
             lastLiquidAtMs = 0L
         }
@@ -1162,8 +1199,8 @@ class CounterOverlay(
         const val INFO_FLIP_MS = 2_800L
         /** Mo comes out no sooner than this after a tracked app opens. */
         const val LIQUID_FIRST_DELAY_MS = 1_400L
-        /** When it wasn't a good moment, try again after this. */
-        const val LIQUID_RETRY_MS = 60_000L
+        /** While a tracked app is open, look whether Mo is due this often. */
+        const val LIQUID_CHECK_MS = 20_000L
         /** How long the timer stays up each time it shows, when it isn't always on. */
         const val TIMER_REVEAL_MS = 5_000L
         const val SNOOZE_MS = 60 * 60_000L

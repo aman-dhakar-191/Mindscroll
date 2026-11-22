@@ -168,6 +168,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                     }
                     Text("How often", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
                     for ((option, label) in listOf(
+                        Settings.LiquidEvery.FIVE_MINUTES to "Every 5 minutes",
                         Settings.LiquidEvery.QUARTER_HOUR to "Every 15 minutes",
                         Settings.LiquidEvery.HALF_HOUR to "Every 30 minutes",
                         Settings.LiquidEvery.HOUR to "Every hour",
@@ -177,13 +178,22 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
                         ChoiceRow(
                             label = label,
                             selected = liquidEvery == option,
-                            subtitle = if (option == Settings.LiquidEvery.HOUR) "Default. At most this often, while a tracked app is open." else null,
+                            subtitle = if (option == Settings.LiquidEvery.HOUR) "Default" else null,
                             enabled = liquidIsland,
                         ) {
                             liquidEvery = option
                             settings.liquidEvery = option
                         }
                     }
+                    Text(
+                        "How it works: while a tracked app is open, Mo checks every 20 seconds. If it has been at least this " +
+                            "long since Mo last came out, out it comes. It counts from the last time it came out, not from when " +
+                            "you started using an app. If you open a tracked app when Mo is overdue, it comes out about a second " +
+                            "later. Mo waits if it is asleep, speaking, or you are on a call. Tapping Mo brings it out any time.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
                 }
             }
             SectionHeader("Privacy")
