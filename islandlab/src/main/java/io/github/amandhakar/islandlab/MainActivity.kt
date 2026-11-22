@@ -44,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var log: TextView
     private lateinit var waitFirst: Switch
+    private lateinit var probe: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,6 +81,18 @@ class MainActivity : Activity() {
         column.addView(button("H. Two Live Updates at once") { two("H") })
         column.addView(button("Remove all tests") { removeAll() })
 
+        column.addView(text("Probe: which notifications are behind an island? Allow notification access for Island Lab only if you want this. It records the app, flags and extra names, never text.", 14f))
+        column.addView(button("Allow notification access (probe)") {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        })
+        column.addView(button("Refresh probe log") { probe.text = ProbeLog.text() })
+        column.addView(button("Copy probe log") {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Island Lab probe", ProbeLog.text()))
+            Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+        })
+        probe = text("", 11f).apply { typeface = Typeface.MONOSPACE }
+        column.addView(probe)
+
         column.addView(text("3. Look at the camera area and the status bar, then copy the log and send it with a screenshot.", 14f))
         column.addView(button("Copy log") { copyLog() })
         log = text("", 12f).apply { typeface = Typeface.MONOSPACE }
@@ -90,6 +103,7 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
+        probe.text = ProbeLog.text()
     }
 
     private fun refreshStatus() {
