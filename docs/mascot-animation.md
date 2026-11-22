@@ -146,3 +146,16 @@ Timer, Counter, Both or Nothing. The rules are in `IslandInfo` and are unit test
   phone can't say what is in front at all it waits twice as long (it used to wait 30 s).
 - The detection log says what the island shows and why (`overlay shows ...`) and where the camera
   and island are (`overlay: camera=...`).
+
+## When the liquid island comes out (`LiquidSchedule`)
+
+Settings → Experiments → Liquid island → How often: every 5, 15 or 30 minutes, hour (default), 2 or 4 hours.
+
+- While the experiment is on and a tracked app is open, the overlay looks every 20 seconds whether Mo is due
+  (`CounterOverlay.liquidCheck`). It runs for every session of every tracked app, and stops when the app closes.
+- Mo is due once the chosen time has passed since it last came out, in wall-clock time, not time spent in apps
+  (`LiquidSchedule.dueInMs`; never having come out, or a clock set back, counts as due). The time is kept in
+  settings, so it holds across restarts. Opening a tracked app when Mo is overdue brings it out about a second later.
+- It waits (and the log says why, once: `liquid: due, but waiting (...)`) while the island isn't showing, Mo is
+  asleep or already out, a call is on, Mo is speaking, or the details panel is open.
+- Tapping Mo in the island brings it out any time, and counts as the last time.
