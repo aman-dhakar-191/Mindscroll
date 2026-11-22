@@ -1,0 +1,61 @@
+name: Island Lab
+
+# Actions -> Island Lab -> Run workflow.
+# Builds the small Island Lab test app (its own package, io.github.amandhakar.islandlab) and
+# publishes it as a GitHub *pre-release* tagged islandlab-v0.1.<run number> (the private app store
+# finds it by the "islandlab-v" prefix, and the tag matches the app's versionName). It never uses a
+# vX.Y.Z tag, so it cannot change Mindscroll's version numbers, and being a pre-release it is not
+# the repository's "latest release".
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    steps:
+      - name: Require signing key
+        if: env.KEYSTORE_BASE64 == ''
+        run: |
+          echo "::error::Add the KEYSTORE_* secrets first. See README."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build signed APK
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          ./gradlew --no-daemon :islandlab:assembleRelease \
+            -PversionName="0.1.${{ github.run_number }}" \
+            -PversionCode="${{ github.run_number }}"
+          rm "$RUNNER_TEMP/release.jks"
+          mkdir -p dist
+          cp islandlab/build/outputs/apk/release/islandlab-release.apk "dist/island-lab-0.1.${{ github.run_number }}.apk"
+
+      - name: Publish pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: islandlab-v0.1.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Island Lab 0.1.${{ github.run_number }} (test app, not Mindscroll)
+          body: "A small test app for the phone's own island / Live Update chip. It is not Mindscroll."
+          prerelease: true
+          make_latest: false
+          files: dist/*.apk
+          fail_on_unmatched_files: true

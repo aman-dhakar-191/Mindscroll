@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "mindscroll"
 include(":app")
+include(":islandlab")
