@@ -63,10 +63,15 @@ private enum class Step(val cheer: String? = null) {
     SEE("*perks up* There we go. I can see now."),
     NOTIFY("Thank you. I'll keep it quiet."),
     STAY("Wide awake. Thank you."),
+    /** Only on phones with their own auto-start list (see [Autostart]); skipped elsewhere. */
+    AUTOSTART,
     DONE,
     ;
 
-    fun next(): Step = entries.getOrElse(ordinal + 1) { DONE }
+    fun next(): Step {
+        val following = entries.getOrElse(ordinal + 1) { DONE }
+        return if (following == AUTOSTART && !Autostart.needed) DONE else following
+    }
 }
 
 /**
@@ -133,7 +138,10 @@ fun OnboardingScreen(
         Step.SEE -> "I can't count what I can't see. Turn me on under Accessibility, in Installed apps. " +
             "I only see the shape of a screen, never your messages, and nothing leaves your phone."
         Step.NOTIFY -> "Want today's number in the status bar? I'll keep it small."
-        Step.STAY -> "Last one. Phones love to put apps to sleep. Let me stay awake in the background so I don't miss a reel."
+        Step.STAY -> "Phones love to put apps to sleep. Let me stay awake in the background so I don't miss a reel."
+        Step.AUTOSTART -> "One more, and it's specific to ${Autostart.thisPhone?.name ?: "your"} phones. They keep their own " +
+            "auto-start list and stop apps that aren't on it, even with battery set to unrestricted. " +
+            "Put me on it so I'm not stopped while you scroll."
         Step.DONE -> "That's everything. Want me to show you around? It takes a minute."
     }
 
@@ -220,16 +228,27 @@ fun OnboardingScreen(
                             }
                         }
                         Step.STAY -> {
-                            Text(
-                                "Some phones (Xiaomi, Oppo, Vivo, Samsung) also have their own \"auto-start\" or " +
-                                    "\"sleeping apps\" lists. Keep Mindscroll off those too.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 FilledTonalButton(onClick = { open(PermissionIntents.ignoreBatteryOptimizations(context)) }) {
                                     Text("Allow")
                                 }
+                                TextButton(onClick = { step = Step.STAY.next() }) { Text("Not now") }
+                            }
+                        }
+                        Step.AUTOSTART -> {
+                            Text(
+                                Autostart.thisPhone?.where.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            FilledTonalButton(onClick = { Autostart.open(context) }) { Text("Open auto-start settings") }
+                            Text(
+                                "Android can't tell me whether this is on, so tell me when you've done it. " +
+                                    "If the page doesn't open, App info opens instead: look for Autostart or Battery there.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Button(onClick = { step = Step.DONE }) { Text("It's on") }
                                 TextButton(onClick = { step = Step.DONE }) { Text("Not now") }
                             }
                         }
@@ -280,7 +299,7 @@ private fun StepDots(current: Step) {
         Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
-        for (step in Step.entries) {
+        for (step in Step.entries.filter { it != Step.AUTOSTART || Autostart.needed }) {
             Box(
                 Modifier
                     .size(if (step == current) 10.dp else 8.dp)
