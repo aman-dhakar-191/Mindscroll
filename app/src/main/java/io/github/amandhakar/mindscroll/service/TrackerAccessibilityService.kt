@@ -14,6 +14,7 @@ import io.github.amandhakar.mindscroll.app
 import io.github.amandhakar.mindscroll.data.Settings as AppSettings
 import io.github.amandhakar.mindscroll.display.CounterNotification
 import io.github.amandhakar.mindscroll.display.CounterOverlay
+import io.github.amandhakar.mindscroll.display.SystemIsland
 import io.github.amandhakar.mindscroll.display.AppStat
 import io.github.amandhakar.mindscroll.display.CounterState
 import io.github.amandhakar.mindscroll.display.CounterWidget
@@ -69,6 +70,8 @@ class TrackerAccessibilityService : AccessibilityService() {
         CounterNotification.cancelLive(this)
         brain = MoBrain(this, overlay, app.metrics, app.moPrefs, app.moMemories, scope).also { it.start() }
         calls = CallWatcher(this) { inCall -> overlay.setInCall(inCall) }.also { it.start() }
+        // The phone's own island (needs notification access; nothing changes without it).
+        scope.launch { SystemIsland.active.collect { overlay.setPhoneIsland(it.values) } }
         val metrics = app.metrics
         val appScope = app.appScope
         appSessions = AppSessionWatcher(this, TrackedApps.packages.value) { usage ->

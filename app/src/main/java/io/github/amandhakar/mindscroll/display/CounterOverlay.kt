@@ -118,6 +118,9 @@ class CounterOverlay(
     private var pendingPatchReaction: SessionReaction? = null
     private val finishExit = Runnable { exitPending = false; refresh() }
     private var inCall = false
+    /** Notifications that may be showing the phone's own island (see [SystemIsland]). */
+    private var phoneIsland: Collection<IslandNotification> = emptyList()
+    private var loggedPhoneIsland: IslandNotification? = null
     /** Long-pressing the patch hides it until this time (uptime ms). */
     private var snoozedUntil = 0L
     private val endSnooze = Runnable { refresh() }
@@ -219,13 +222,15 @@ class CounterOverlay(
 
     /**
      * Keep Mo's native patch visible for the full tracked-app session. It steps aside during
-     * calls and while snoozed, but does not hand its place to a system Live Update chip: that
-     * chip cannot render MoView, its animations, or the in-patch Chronometer.
+     * calls, while snoozed, and while the phone's own island is showing another app's
+     * notification (see [setPhoneIsland]). Mindscroll's own Live Update chip never takes its place:
+     * that chip cannot render MoView, its animations, or the in-patch Chronometer.
      */
     private fun patchWanted(): Boolean =
         display.cameraPatch &&
             isPortrait() &&
             !inCall &&
+            phoneIslandTrigger() == null &&
             SystemClock.uptimeMillis() >= snoozedUntil &&
             (session != null || exitPending)
 
@@ -240,6 +245,28 @@ class CounterOverlay(
         DetectionLog.add("overlay: call ${if (newInCall) "started, patch steps aside" else "ended"}")
         inCall = newInCall
         refresh()
+    }
+
+    /**
+     * The notifications that may be showing the phone's own island changed. While one with an
+     * island mark is up (or any ongoing one, if the user asked for that), the patch makes room.
+     */
+    fun setPhoneIsland(active: Collection<IslandNotification>) {
+        phoneIsland = active
+        refresh()
+    }
+
+    /** The notification the patch is stepping aside for, or null; logs when that changes. */
+    private fun phoneIslandTrigger(): IslandNotification? {
+        val trigger = if (display.islandStepAside) IslandRules.trigger(phoneIsland, display.islandAnyOngoing) else null
+        if (trigger != loggedPhoneIsland) {
+            DetectionLog.add(
+                if (trigger != null) "overlay: phone's island up for ${trigger.packageName} (${trigger.kind.label}), patch steps aside"
+                else "overlay: phone's island gone (${loggedPhoneIsland?.packageName}), patch can come back",
+            )
+            loggedPhoneIsland = trigger
+        }
+        return trigger
     }
 
     /** The camera position moves with rotation; rebuild the patch for the new layout. */
@@ -646,6 +673,7 @@ class CounterOverlay(
         DetectionLog.add(
             if (wanted) "overlay: patch shown"
             else "overlay: patch hidden (cameraPatch=${display.cameraPatch}, portrait=${isPortrait()}, inCall=$inCall, " +
+                "phoneIsland=${loggedPhoneIsland?.packageName}, " +
                 "snoozed=${SystemClock.uptimeMillis() < snoozedUntil}, session=${session != null}, exiting=$exitPending)",
         )
     }

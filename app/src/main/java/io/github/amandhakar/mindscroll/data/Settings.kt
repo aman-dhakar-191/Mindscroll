@@ -104,6 +104,10 @@ class Settings(context: Context) {
         val liquidEvery: LiquidEvery = LiquidEvery.HOUR,
         val character: MoCharacter = MoCharacter.MO,
         val palette: MoPalette = MoPalette.CLASSIC,
+        /** The patch steps aside while the phone's own island shows (needs notification access). On by default. */
+        val islandStepAside: Boolean = true,
+        /** Also step aside for any ongoing notification, not only ones with an island mark. Off by default. */
+        val islandAnyOngoing: Boolean = false,
     )
 
     init {
@@ -123,6 +127,16 @@ class Settings(context: Context) {
     var bubble: Boolean
         get() = prefs.getBoolean(KEY_BUBBLE, false)
         set(value) = prefs.edit().putBoolean(KEY_BUBBLE, value).apply()
+
+    /** See [Display.islandStepAside]. */
+    var islandStepAside: Boolean
+        get() = prefs.getBoolean(KEY_ISLAND_STEP_ASIDE, true)
+        set(value) = prefs.edit().putBoolean(KEY_ISLAND_STEP_ASIDE, value).apply()
+
+    /** See [Display.islandAnyOngoing]. */
+    var islandAnyOngoing: Boolean
+        get() = prefs.getBoolean(KEY_ISLAND_ANY_ONGOING, false)
+        set(value) = prefs.edit().putBoolean(KEY_ISLAND_ANY_ONGOING, value).apply()
 
     /**
      * The old, single "what the island shows" setting. No longer written: it only supplies the
@@ -268,13 +282,15 @@ class Settings(context: Context) {
     fun display() = Display(
         cameraPatch, bubble, infoChoices(), mascotSize, motionStyle, milestoneReactions,
         timerReveal, counterTimerEvery, leaveDelay, liquidIsland, liquidEvery, mascotCharacter, mascotPalette,
+        islandStepAside, islandAnyOngoing,
     )
 
     fun observeDisplay(): Flow<Display> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == KEY_CAMERA_PATCH || key == KEY_BUBBLE || key == KEY_INFO_MODE || key == KEY_AUTO_SCROLL || key == KEY_APP_INFO ||
                 key == KEY_COUNTER_TIMER_EVERY || key == KEY_LEAVE_DELAY || key == KEY_LIQUID_ISLAND || key == KEY_LIQUID_EVERY || key == KEY_MASCOT_SIZE || key == KEY_MOTION_STYLE || key == KEY_MILESTONE_REACTIONS ||
-                key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE || key == KEY_TIMER_REVEAL
+                key == KEY_MASCOT_CHARACTER || key == KEY_MASCOT_PALETTE || key == KEY_TIMER_REVEAL ||
+                key == KEY_ISLAND_STEP_ASIDE || key == KEY_ISLAND_ANY_ONGOING
             ) trySend(display())
         }
         trySend(display())
@@ -286,6 +302,8 @@ class Settings(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_CAMERA_PATCH = "camera_patch"
         const val KEY_BUBBLE = "bubble"
+        const val KEY_ISLAND_STEP_ASIDE = "island_step_aside"
+        const val KEY_ISLAND_ANY_ONGOING = "island_any_ongoing"
         const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
         const val KEY_INFO_MODE = "info_mode"
         const val KEY_AUTO_SCROLL = "auto_scroll"

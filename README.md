@@ -19,6 +19,15 @@ and keeps today's numbers in front of you, with **Mo** keeping you company:
   app is in use, it always hides during phone and VoIP calls (from the audio mode, no extra
   permission), and a long-press hides it for an hour. Android's own call and timer chips stay
   visible.
+  It can also make room for the phone's own island (Settings → *Make room for the phone's
+  island*). With notification access, it hides while another app's notification is marked for
+  the island and comes back the moment that notification goes: Xiaomi's Super Island (extras
+  named `miui.focus.…`) or an Android 16 Live Update (`FLAG_PROMOTED_ONGOING`). Mindscroll's
+  own notification never counts. Plain ongoing notifications (music, VPNs, downloads) only count
+  if you switch on *Also for any ongoing notification*. It reads a notification's app, flags and
+  the names of its extras, never its text. The detection log's `island:` and
+  `overlay: phone's island` lines say which notification made Mo step aside. Without
+  notification access, nothing changes.
 - **Live timer:** while a tracked app is open, the camera patch widens to show
   a ticking timer in the app's color, next to Mo. It shows today's total time in that app, so
   reopening the app resumes the timer instead of restarting it, and it starts over at midnight.
