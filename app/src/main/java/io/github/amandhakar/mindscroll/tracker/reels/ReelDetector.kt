@@ -214,11 +214,12 @@ class ReelDetector(
         val previous = feed.lastIndex
         feed.lastIndex = index
         return when {
-            // Opened without knowing the position: learn it. Right after opening it's still
-            // the opening reel; later it's one the user swiped to.
+            // Opened without knowing the position: learn it. Soon after opening it's still the
+            // opening reel (a viewer opened from a profile jumps to the tapped reel once its
+            // list loads, which can take over a second); later it's one the user swiped to.
             feed.furthestIndex < 0 -> {
                 feed.furthestIndex = index
-                if (justOpened) no("learned position #$index") else yes("swiped to #$index")
+                if (time - feed.openedAt < FIRST_POSITION_SETTLE_MS) no("learned position #$index") else yes("swiped to #$index")
             }
             index > feed.furthestIndex -> {
                 feed.furthestIndex = index
@@ -379,9 +380,26 @@ class ReelDetector(
     /** Whether [sample] scrolled a reel feed (by known id or by shape). */
     fun isReelFeed(sample: ScrollSample): Boolean = appFor(sample.packageName)?.let { isReelFeed(it, sample) } ?: false
 
+    /**
+     * Ids of lists seen showing three or more items at once, per app: they're mixed feeds
+     * (like Instagram's home feed, id `list`), even when one big post briefly fills them.
+     */
+    private val mixedListIds = mutableMapOf<String, MutableSet<String>>()
+
+    /** Whether the list with [viewId] in [packageName] has shown itself to be a mixed feed. */
+    fun isMixedList(packageName: String, viewId: String): Boolean = mixedListIds[packageName]?.contains(viewId) == true
+
     private fun isReelFeed(app: ReelApp, sample: ScrollSample): Boolean {
-        if (sample.viewId != null && sample.viewId in app.containerIds) return true
+        val id = sample.viewId
+        if (id != null && id in app.containerIds) return true
         if (sample.horizontal) return false
+        if (id != null) {
+            // A reel feed shows one reel, or two mid-swipe; never three.
+            if (sample.fromIndex >= 0 && sample.toIndex - sample.fromIndex >= 2) {
+                mixedListIds.getOrPut(sample.packageName) { mutableSetOf() }.add(id)
+            }
+            if (isMixedList(sample.packageName, id)) return false
+        }
         return looksLikeReelFeed(sample.containerHeight, sample.tallestChildHeight, sample.screenHeight)
     }
 
@@ -392,6 +410,8 @@ class ReelDetector(
         const val GESTURE_GAP_MS = 600L
         /** Scrolls this soon after opening a feed are its first layout, not a swipe. */
         const val OPEN_SETTLE_MS = 1500L
+        /** The first position a feed reports this soon after opening is where it opened. */
+        const val FIRST_POSITION_SETTLE_MS = 3000L
         /** A feed hidden for less than this (a sheet or dialog on top) is the same visit. */
         const val REOPEN_GAP_MS = 4000L
         /** No events from the app for this long means the user left it (or the screen went off). */

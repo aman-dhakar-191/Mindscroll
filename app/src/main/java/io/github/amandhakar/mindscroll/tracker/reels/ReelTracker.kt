@@ -43,6 +43,35 @@ class ReelTracker(
     /** Feed view ids seen in reel-feed scrolls, so screen checks find feeds whose ids changed. */
     private val learnedIds = mutableMapOf<String, MutableSet<String>>()
 
+    /** Settled reel-shaped scrolls seen per unknown view id, towards learning it. */
+    private val feedIdHits = mutableMapOf<String, Int>()
+
+    /**
+     * Learns an unknown view id as a reel feed after [LEARN_AFTER_HITS] settled scrolls that
+     * look like one, and forgets it once it shows itself to be a mixed feed. A big post briefly
+     * filling the home feed used to teach `list`, after which every return to the home feed
+     * or a profile counted as opening a reel.
+     */
+    private fun learnFeedId(sample: ScrollSample, app: ReelApp) {
+        val id = sample.viewId ?: return
+        if (id in app.containerIds) return
+        val learned = learnedIds.getOrPut(app.packageName) { mutableSetOf() }
+        if (detector.isMixedList(app.packageName, id) || !detector.isReelFeed(sample)) {
+            feedIdHits.remove("${app.packageName}|$id")
+            if (detector.isMixedList(app.packageName, id) && learned.remove(id)) {
+                DetectionLog.add("${app.short} forgot feed id ${id.substringAfter(":id/")}: it shows several posts at once")
+            }
+            return
+        }
+        val settled = sample.toIndex < 0 || sample.toIndex == sample.fromIndex
+        if (id in learned || !settled) return
+        val hits = (feedIdHits["${app.packageName}|$id"] ?: 0) + 1
+        feedIdHits["${app.packageName}|$id"] = hits
+        if (hits >= LEARN_AFTER_HITS && learned.add(id)) {
+            DetectionLog.add("${app.short} learned feed id ${id.substringAfter(":id/")}")
+        }
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent, host: TrackerHost) {
         val packageName = event.packageName?.toString() ?: return
         val app = appFor(packageName) ?: return
@@ -94,11 +123,7 @@ class ReelTracker(
             feedKey = source.hashCode(),
             scrollDeltaY = event.verticalDelta(),
         )
-        if (sample.viewId != null && sample.viewId !in app.containerIds && detector.isReelFeed(sample)) {
-            if (learnedIds.getOrPut(app.packageName) { mutableSetOf() }.add(sample.viewId)) {
-                DetectionLog.add("${app.short} learned feed id ${sample.viewId.substringAfter(":id/")}")
-            }
-        }
+        learnFeedId(sample, app)
         if (app.feedReelIdHints.isNotEmpty() && !sample.horizontal && !detector.isReelFeed(sample)) {
             onMixedFeedScroll(event, source, sample, app, host)
         }
@@ -157,13 +182,23 @@ class ReelTracker(
             }
         } ?: false
         if (cache.kinds.size > MAX_CACHED_POSTS) cache.kinds.remove(cache.kinds.keys.first())
-        if (detector.onFeedScroll(app.packageName, sample.timeMs, key, item?.first, isReel)) {
-            host.record(app.packageName, 1)
+        val counted = detector.onFeedScroll(app.packageName, sample.timeMs, key, item?.first, isReel)
+        if (counted) host.record(app.packageName, 1)
+        // Log home-feed decisions when they change (not every scroll event), so a log shows
+        // whether a reel was waited on, counted, or passed by.
+        val kind = detector.lastReason.replace(digits, "#")
+        val changed = detector.lastReason != lastFeedReason && (kind != lastFeedKind || isReel)
+        if (counted || changed) {
             flushRepeatedSkips()
             lastSkipKind = null
-            DetectionLog.add("${app.short} feed → COUNTED: ${detector.lastReason}")
+            DetectionLog.add("${app.short} feed → ${if (counted) "COUNTED" else "skip"}: ${detector.lastReason}")
         }
+        lastFeedReason = detector.lastReason
+        lastFeedKind = kind
     }
+
+    private var lastFeedReason = ""
+    private var lastFeedKind = ""
 
     /** What's known about the posts of one mixed feed: which positions are reels. */
     private class PostCache {
@@ -277,6 +312,7 @@ class ReelTracker(
     private fun findFeed(app: ReelApp, root: AccessibilityNodeInfo): Feed? {
         val screen = screenHeight()
         val ids = app.containerIds + learnedIds[app.packageName].orEmpty()
+            .filterNot { detector.isMixedList(app.packageName, it) }
         if (ids.isNotEmpty()) {
             // Every matching view: a viewer opened from a profile or the home feed can sit on
             // top of the Reels tab's, and both count as visible.
@@ -359,5 +395,7 @@ class ReelTracker(
         const val MAX_CACHED_POSTS = 300
         /** Non-reel posts logged with their ids per run, to tune the hints from a log. */
         const val MAX_LOGGED_POST_KINDS = 20
+        /** Settled reel-shaped scrolls needed before an unknown view id counts as a reel feed. */
+        const val LEARN_AFTER_HITS = 3
     }
 }

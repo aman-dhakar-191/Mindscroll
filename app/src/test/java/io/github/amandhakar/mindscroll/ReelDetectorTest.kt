@@ -425,6 +425,48 @@ class ReelDetectorTest {
         assertTrue(d.onScreen(instagram, 5000, feedShowing = true, feedKeys = setOf(55)))
     }
 
+    // --- From a phone log (v1.18.0) ---
+
+    private val homeList = "com.instagram.android:id/list"
+
+    @Test
+    fun aListShowingSeveralPostsIsNeverAReelFeed() {
+        val d = ReelDetector()
+        // The home feed: several posts at once.
+        assertFalse(d.onScroll(sample(time = 0, viewId = homeList, from = 138, to = 143, count = 165, childHeight = 1643, key = 1)))
+        assertTrue(d.isMixedList(instagram, homeList))
+        // Later one big post fills it, settled: still not a reel feed.
+        assertFalse(d.onScroll(sample(time = 2000, viewId = homeList, from = 150, count = 165, childHeight = 2398, containerHeight = 2398, key = 1)))
+        assertEquals("not a reel feed", d.lastReason)
+        // A profile's posts use the same id.
+        assertFalse(d.onScroll(sample(time = 4000, viewId = homeList, from = 0, count = 21, childHeight = 2398, containerHeight = 2398, key = 2)))
+    }
+
+    @Test
+    fun reelOpenedFromAProfileCountsOnceWhenItsListLoadsLate() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        // Tapped a reel on a profile: the viewer lays out before its list loads...
+        assertTrue(d.onScroll(sample(time = 10_000, from = 0, count = -1, key = profileViewer)))
+        // ...then jumps to the tapped reel 1.6 s later. Not a swipe.
+        assertFalse(d.onScroll(sample(time = 11_600, from = 1, count = 13, key = profileViewer)))
+        assertEquals("learned position #1", d.lastReason)
+        assertTrue(d.onScroll(sample(time = 12_500, from = 2, count = 13, key = profileViewer)))
+    }
+
+    @Test
+    fun homeFeedReelCountsAfterStoppingThenScrollingOn() {
+        val d = ReelDetector()
+        // Scrolling the home feed: posts pass, then it stops on reel #145 and no other events come.
+        d.onFeedScroll(instagram, 0, homeFeed, index = 143, isReel = true)
+        d.onFeedScroll(instagram, 150, homeFeed, index = 144, isReel = false)
+        d.onFeedScroll(instagram, 300, homeFeed, index = 145, isReel = true)
+        d.onFeedScroll(instagram, 400, homeFeed, index = 145, isReel = true)
+        // Five seconds later, small scrolls while it's still the main post: it counts.
+        assertTrue(d.onFeedScroll(instagram, 5400, homeFeed, index = 145, isReel = true))
+        assertFalse(d.onFeedScroll(instagram, 5500, homeFeed, index = 145, isReel = true))
+    }
+
     // --- What counts as a reel feed ---
 
     @Test
