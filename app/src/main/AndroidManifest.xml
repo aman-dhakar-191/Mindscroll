@@ -410,6 +410,20 @@
                 android:resource="@xml/accessibility_service" />
         </service>
 
+        <!--
+            Optional: with "Notification access", the camera patch steps aside while the phone's own
+            island shows another app's notification. Reads flags and extra names, never text.
+        -->
+        <service
+            android:name=".service.IslandListenerService"
+            android:exported="true"
+            android:label="@string/island_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".service.BootReceiver"
             android:exported="false">

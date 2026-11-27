@@ -43,6 +43,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
@@ -58,6 +60,7 @@ import io.github.amandhakar.mindscroll.mascot.MoMemories
 import io.github.amandhakar.mindscroll.mascot.MoPolicy
 import io.github.amandhakar.mindscroll.mascot.Mood
 import io.github.amandhakar.mindscroll.mascot.QuietHours
+import io.github.amandhakar.mindscroll.service.IslandListenerService
 import io.github.amandhakar.mindscroll.tracker.TrackedApps
 import io.github.amandhakar.mindscroll.tracker.TrackerRegistry
 import java.time.LocalDate
@@ -105,6 +108,71 @@ internal fun DiagnosticsCard() {
                 settings.diagnosticsEnabled = it
                 FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(it)
                 FirebaseAnalytics.getInstance(context).setAnalyticsCollectionEnabled(it)
+            }
+        }
+    }
+}
+
+/**
+ * Making room for the phone's own island (Xiaomi's Super Island, Android 16 Live Updates). Needs
+ * notification access; without it the patch works as before.
+ */
+@Composable
+internal fun PhoneIslandCard() {
+    val context = LocalContext.current
+    val settings = context.app.settings
+    var access by remember { mutableStateOf(IslandListenerService.isEnabled(context)) }
+    var stepAside by remember { mutableStateOf(settings.islandStepAside) }
+    var anyOngoing by remember { mutableStateOf(settings.islandAnyOngoing) }
+    // Back from the system settings: notification access may have changed.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { access = IslandListenerService.isEnabled(context) }
+    Panel {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Make room for the phone's island", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Some phones show their own island by the camera while an app has a live notification up, like a " +
+                    "timer, a delivery or a ride. Mo can step aside while it shows and come back when it goes.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!access) {
+                Text(
+                    "This needs notification access. Mindscroll only looks at which app a notification is from and how " +
+                        "it is marked, never its text, and keeps nothing.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilledTonalButton(onClick = {
+                    val opened = runCatching { context.startActivity(PermissionIntents.notificationListenerSettings(context)) }.isSuccess ||
+                        runCatching { context.startActivity(PermissionIntents.notificationListenerList()) }.isSuccess
+                    if (!opened) runCatching { context.startActivity(PermissionIntents.appInfo(context)) }
+                }) { Text("Allow notification access") }
+                Text(
+                    "If Android says it's a restricted setting, open App info, tap ⋮, choose Allow restricted settings, then try again.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { runCatching { context.startActivity(PermissionIntents.appInfo(context)) } }) {
+                    Text("Open App info")
+                }
+            } else {
+                Text("Notification access is on.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ToggleRow(
+                    "Step aside for the phone's island",
+                    "Mo hides while another app's notification is marked for the island (Xiaomi island or an Android 16 Live Update).",
+                    stepAside,
+                ) {
+                    stepAside = it
+                    settings.islandStepAside = it
+                }
+                ToggleRow(
+                    "Also for any ongoing notification",
+                    "For phones whose island shows other notifications too, like music. Mo will hide much more often.",
+                    anyOngoing,
+                ) {
+                    anyOngoing = it
+                    settings.islandAnyOngoing = it
+                }
             }
         }
     }

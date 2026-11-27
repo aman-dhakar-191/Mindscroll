@@ -88,6 +88,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenApps: () -> Unit, onOpenMemories: (
 
             SectionHeader("Camera island")
             IslandSettings(settings, onOpenApps)
+            PhoneIslandCard()
 
             SectionHeader("Where Mo appears")
             Panel {
