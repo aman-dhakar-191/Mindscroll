@@ -198,7 +198,7 @@ class ReelTracker(
     }
 
     private var lastFeedReason = ""
-    private var lastFeedKind = 
+    private var lastFeedKind = ""
 
     /** What's known about the posts of one mixed feed: which positions are reels. */
     private class PostCache {
