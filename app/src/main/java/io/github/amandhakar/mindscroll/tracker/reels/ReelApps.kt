@@ -15,6 +15,11 @@ data class ReelApp(
     /** A color for the app, ARGB, used for its live timer in the camera patch. */
     val accent: Long,
     val containerIds: Set<String> = emptySet(),
+    /**
+     * Parts of view ids that mark a reel playing inside a mixed feed (the home feed, a
+     * profile's posts). Empty: reels in this app's mixed feeds aren't counted.
+     */
+    val feedReelIdHints: Set<String> = emptySet(),
 )
 
 /**
@@ -31,6 +36,8 @@ object ReelApps {
             short = "IG",
             accent = 0xFFFF5C8A,
             containerIds = setOf("com.instagram.android:id/clips_viewer_view_pager"),
+            // Instagram calls reels "clips" inside the app (reel_* ids are stories).
+            feedReelIdHints = setOf("clips"),
         ),
         ReelApp(
             packageName = "com.google.android.youtube",

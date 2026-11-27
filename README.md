@@ -98,16 +98,31 @@ one item fills the list, so it works in any app with a TikTok-style feed. That r
 stories are skipped.
 
 - **Opening a feed counts its first reel.** This covers the Reels tab, tapping a reel in the
-  feed, and coming back to the app. Window changes trigger a check of the screen, at most
-  every 0.8 s, because video apps change their content constantly.
+  feed, on a profile or in Explore, and coming back to the app after more than 10 minutes.
+  Window changes trigger a check of the screen, at most every 0.8 s, because video apps change
+  their content constantly.
+- **Each feed view counts on its own.** A reel opened from a profile or the home feed gets a
+  viewer of its own, numbered from wherever it starts, while the Reels tab can stay open
+  underneath. A viewer that appears on top counts its first reel, and its reels are compared
+  only with each other.
 - **Swiping counts each new reel** once the list settles on an item further down than any
-  already counted in this visit, so swiping back and forth doesn't count again. A refresh
-  back to the top counts its new first reel.
+  already counted in that view, so swiping back and forth doesn't count again, including back
+  to the very first reel. Jumping straight to the top (a refresh, tapping the tab again) counts
+  its new first reel.
 - **A sheet or dialog over a reel** (comments, share) doesn't count again when it closes. Nor
-  does coming back to the exact reel you left.
+  does coming back to a feed view still in place (another app, the screen off, another tab)
+  within 10 minutes: it shows the reel you left.
+- **Reels in the home feed** (and a profile's posts) count once each when you stop on one for
+  1.2 s, so scrolling straight past doesn't count and scrolling back up to one doesn't count it
+  again. Opening that reel full screen right after doesn't count it twice. For now this is
+  Instagram only: a post counts as a reel when a view inside it has `clips` in its id (Instagram's
+  own name for reels) or a label that says "reel". The detection log lists the first posts it
+  looks at with their view ids, to tune this if Instagram changes.
 - **A visit ends** when you leave the feed, or after 45 s with no activity at all from the app.
 
-If an app doesn't report item positions, each separate swipe gesture counts once instead. These
+If an app doesn't report item positions but says how far the list moved, a swipe counts only when
+it goes past the furthest reel reached, so swiping back doesn't count. If it says neither, each
+separate swipe gesture counts once. These
 rules live in [`ReelDetector`](app/src/main/java/io/github/amandhakar/mindscroll/tracker/reels/ReelDetector.kt).
 They're unit tested, and the feed-id hints for known apps are in
 [`ReelApps`](app/src/main/java/io/github/amandhakar/mindscroll/tracker/reels/ReelApps.kt);
