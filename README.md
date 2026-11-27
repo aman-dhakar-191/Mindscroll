@@ -118,6 +118,9 @@ stories are skipped.
   Instagram only: a post counts as a reel when a view inside it has `clips` in its id (Instagram's
   own name for reels) or a label that says "reel". The detection log lists the first posts it
   looks at with their view ids, to tune this if Instagram changes.
+- **Lists that show several posts at once** (like Instagram's home feed and a profile's posts,
+  both id `list`) are never taken for a reel feed, even when one big post fills the screen, and
+  an unknown id is only learned as a reel feed after three settled scrolls that look like one.
 - **A visit ends** when you leave the feed, or after 45 s with no activity at all from the app.
 
 If an app doesn't report item positions but says how far the list moved, a swipe counts only when
