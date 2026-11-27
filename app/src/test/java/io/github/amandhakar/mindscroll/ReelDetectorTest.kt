@@ -24,7 +24,9 @@ class ReelDetectorTest {
         containerHeight: Int = screen,
         childHeight: Int = screen,
         horizontal: Boolean = false,
-    ) = ScrollSample(pkg, time, viewId, from, to, count, containerHeight, childHeight, screen, horizontal)
+        key: Int? = null,
+        dy: Int? = null,
+    ) = ScrollSample(pkg, time, viewId, from, to, count, containerHeight, childHeight, screen, horizontal, key, dy)
 
     /** Number of samples the detector counted as a new reel. */
     private fun ReelDetector.count(vararg samples: ScrollSample) = samples.count { onScroll(it) }
@@ -171,6 +173,256 @@ class ReelDetectorTest {
         assertTrue(d.onScreen(facebook, 0, feedShowing = true))
         assertFalse(d.onScroll(sample(pkg = facebook, viewId = null, time = 300)))
         assertTrue(d.onScroll(sample(pkg = facebook, viewId = null, time = 5000)))
+    }
+
+    // --- Swiping back ---
+
+    @Test
+    fun swipingBackToTheFirstReelDoesNotCount() {
+        val d = ReelDetector()
+        val counted = d.count(
+            sample(time = 0, from = 0), // new
+            sample(time = 2000, from = 1), // new
+            sample(time = 4000, from = 0), // back to the first one
+            sample(time = 6000, from = 1), // seen
+        )
+        assertEquals(2, counted)
+        assertEquals("already seen #1 (furthest #1)", d.lastReason)
+    }
+
+    @Test
+    fun swipingBackStepByStepToTheTopDoesNotCount() {
+        val d = ReelDetector()
+        val counted = d.count(
+            sample(time = 0, from = 0),
+            sample(time = 2000, from = 1),
+            sample(time = 4000, from = 2),
+            sample(time = 6000, from = 1),
+            sample(time = 8000, from = 0),
+        )
+        assertEquals(3, counted)
+    }
+
+    @Test
+    fun withScrollDistanceSwipingBackDoesNotCount() {
+        val d = ReelDetector()
+        val fb = { t: Long, dy: Int -> sample(pkg = facebook, viewId = null, time = t, dy = dy) }
+        val counted = d.count(
+            fb(0, 0), // landing in the feed: new
+            fb(3000, 1200), fb(3100, 1200), // forward: new
+            fb(6000, 1300), fb(6100, 1100), // forward: new
+            fb(9000, -1200), fb(9100, -1200), // back: seen
+            fb(12_000, 2400), // forward again to the one already seen
+            fb(15_000, 2400), // forward to a new one
+        )
+        assertEquals(4, counted)
+    }
+
+    @Test
+    fun withScrollDistanceADragThatSpringsBackDoesNotCount() {
+        val d = ReelDetector()
+        assertTrue(d.onScroll(sample(pkg = facebook, viewId = null, time = 0, dy = 0)))
+        // Pulled a little, let go: it springs back.
+        assertFalse(d.onScroll(sample(pkg = facebook, viewId = null, time = 3000, dy = 300)))
+        assertFalse(d.onScroll(sample(pkg = facebook, viewId = null, time = 3100, dy = -300)))
+        assertTrue(d.onScroll(sample(pkg = facebook, viewId = null, time = 6000, dy = 2000)))
+    }
+
+    @Test
+    fun withScrollDistanceAPagerJumpingBackAfterASwipeStillCounts() {
+        val d = ReelDetector()
+        d.onScroll(sample(pkg = facebook, viewId = null, time = 0, dy = 0))
+        val counted = d.count(
+            sample(pkg = facebook, viewId = null, time = 3000, dy = 1500),
+            sample(pkg = facebook, viewId = null, time = 3100, dy = 900),
+            sample(pkg = facebook, viewId = null, time = 3200, dy = -2400), // re-centred
+        )
+        assertEquals(1, counted)
+    }
+
+    // --- Viewers opened on top of the Reels tab ---
+
+    private val reelsTab = 11
+    private val profileViewer = 22
+
+    @Test
+    fun reelOpenedFromAProfileOverTheReelsTabCounts() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        d.count(
+            sample(time = 200, from = 0, key = reelsTab),
+            sample(time = 2000, from = 30, key = reelsTab), // well down the Reels tab
+        )
+        // Went to a profile (the Reels tab stays underneath and still counts as showing),
+        // tapped one of its reels: a new viewer starting at its own #0.
+        assertFalse(d.onScreen(instagram, 20_000, feedShowing = true, feedKeys = setOf(reelsTab)))
+        assertTrue(d.onScreen(instagram, 30_000, feedShowing = true, feedKeys = setOf(reelsTab, profileViewer)))
+        val counted = d.count(
+            sample(time = 30_200, from = 0, key = profileViewer), // its layout
+            sample(time = 33_000, from = 0, to = 1, key = profileViewer),
+            sample(time = 33_100, from = 1, key = profileViewer),
+            sample(time = 36_000, from = 2, key = profileViewer),
+            sample(time = 39_000, from = 1, key = profileViewer), // back
+        )
+        assertEquals(2, counted)
+    }
+
+    @Test
+    fun viewerNoticedFirstByItsScrollsCountsOnce() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        d.onScroll(sample(time = 2000, from = 5, key = reelsTab))
+        // The profile's viewer scrolls before a screen check finds it.
+        assertTrue(d.onScroll(sample(time = 30_000, from = 3, key = profileViewer)))
+        assertFalse(d.onScreen(instagram, 30_300, feedShowing = true, feedKeys = setOf(reelsTab, profileViewer)))
+        assertTrue(d.onScroll(sample(time = 33_000, from = 4, key = profileViewer)))
+    }
+
+    @Test
+    fun backToTheReelsTabFromAViewerDoesNotRecount() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        d.count(sample(time = 200, from = 0, key = reelsTab), sample(time = 2000, from = 4, key = reelsTab))
+        assertTrue(d.onScreen(instagram, 10_000, feedShowing = true, feedKeys = setOf(reelsTab, profileViewer)))
+        assertFalse(d.onScreen(instagram, 20_000, feedShowing = true, feedKeys = setOf(reelsTab))) // closed it
+        assertFalse(d.onScroll(sample(time = 22_000, from = 4, key = reelsTab)))
+        assertTrue(d.onScroll(sample(time = 24_000, from = 5, key = reelsTab)))
+    }
+
+    @Test
+    fun anotherReelOpenedRightAfterClosingOneCounts() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(profileViewer)))
+        assertFalse(d.onScreen(instagram, 5000, feedShowing = false)) // back on the profile
+        assertTrue(d.onScreen(instagram, 6000, feedShowing = true, feedKeys = setOf(33))) // next reel
+    }
+
+    // --- Coming back ---
+
+    @Test
+    fun comingBackToTheSameFeedViewDoesNotRecount() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        // Screen off for a few minutes, or another app.
+        val back = ReelDetector.AWAY_GAP_MS + 3 * 60_000L
+        assertFalse(d.onScreen(instagram, back, feedShowing = true, feedKeys = setOf(reelsTab)))
+        assertEquals("back on the same feed after 225s", d.lastReason)
+    }
+
+    @Test
+    fun switchingTabsAndBackDoesNotRecount() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        d.count(sample(time = 200, from = 0, key = reelsTab), sample(time = 3000, from = 1, key = reelsTab))
+        assertFalse(d.onScreen(instagram, 10_000, feedShowing = false)) // home tab
+        assertFalse(d.onScreen(instagram, 40_000, feedShowing = true, feedKeys = setOf(reelsTab))) // Reels tab again
+        assertFalse(d.onScroll(sample(time = 40_500, from = 1, key = reelsTab)))
+        assertTrue(d.onScroll(sample(time = 43_000, from = 2, key = reelsTab)))
+    }
+
+    @Test
+    fun comingBackAfterALongTimeCountsTheReelShown() {
+        val d = ReelDetector()
+        assertTrue(d.onScreen(instagram, 0, feedShowing = true, feedKeys = setOf(reelsTab)))
+        assertTrue(d.onScreen(instagram, ReelDetector.STALE_MS + 60_000, feedShowing = true, feedKeys = setOf(reelsTab)))
+    }
+
+    @Test
+    fun scrollingInAFeedViewLeftEarlierContinuesFromWhereItWas() {
+        val d = ReelDetector()
+        d.count(sample(time = 0, from = 0, key = reelsTab), sample(time = 2000, from = 3, key = reelsTab))
+        d.onScreen(instagram, 5000, feedShowing = false)
+        // Back to the tab and swiping before a screen check sees it.
+        assertFalse(d.onScroll(sample(time = 60_000, from = 3, key = reelsTab)))
+        assertTrue(d.onScroll(sample(time = 62_000, from = 4, key = reelsTab)))
+    }
+
+    // --- Reels in the home feed ---
+
+    private val homeFeed = 44
+
+    @Test
+    fun feedReelCountsWhenYouStopOnIt() {
+        val d = ReelDetector()
+        assertFalse(d.onFeedScroll(instagram, 0, homeFeed, index = 3, isReel = true))
+        assertFalse(d.onFeedScroll(instagram, 100, homeFeed, index = 3, isReel = true))
+        // The list stopped; the reel keeps playing.
+        assertFalse(d.onTick(instagram, 800))
+        assertTrue(d.onTick(instagram, 1400))
+        assertEquals("reel in the feed #3", d.lastReason)
+        assertFalse(d.onTick(instagram, 2000))
+    }
+
+    @Test
+    fun scrollingStraightPastFeedReelsDoesNotCount() {
+        val d = ReelDetector()
+        var t = 0L
+        for (index in 0..20) {
+            assertFalse(d.onFeedScroll(instagram, t, homeFeed, index, isReel = index % 2 == 0))
+            t += 150
+        }
+    }
+
+    @Test
+    fun feedReelCountsWhenYouScrollOnAfterStayingOnIt() {
+        val d = ReelDetector()
+        d.onFeedScroll(instagram, 0, homeFeed, index = 5, isReel = true)
+        // No other events arrived while it played; then the next scroll moves on.
+        assertTrue(d.onFeedScroll(instagram, 5000, homeFeed, index = 6, isReel = false))
+        assertEquals("reel in the feed #5", d.lastReason)
+    }
+
+    @Test
+    fun scrollingBackUpToAFeedReelDoesNotCountItAgain() {
+        val d = ReelDetector()
+        d.onFeedScroll(instagram, 0, homeFeed, index = 5, isReel = true)
+        assertTrue(d.onTick(instagram, 2000))
+        d.onFeedScroll(instagram, 3000, homeFeed, index = 6, isReel = false)
+        assertFalse(d.onFeedScroll(instagram, 6000, homeFeed, index = 5, isReel = true))
+        assertEquals("feed reel #5 already counted", d.lastReason)
+        assertFalse(d.onTick(instagram, 9000))
+    }
+
+    @Test
+    fun photosInTheFeedDoNotCount() {
+        val d = ReelDetector()
+        d.onFeedScroll(instagram, 0, homeFeed, index = 2, isReel = false)
+        assertFalse(d.onTick(instagram, 5000))
+        assertFalse(d.onFeedScroll(instagram, 6000, homeFeed, index = 3, isReel = false))
+    }
+
+    @Test
+    fun feedRefreshedFromTheTopCountsItsReelsAgain() {
+        val d = ReelDetector()
+        d.onFeedScroll(instagram, 0, homeFeed, index = 0, isReel = true)
+        assertTrue(d.onTick(instagram, 2000))
+        d.onFeedScroll(instagram, 3000, homeFeed, index = 1, isReel = false)
+        d.onFeedScroll(instagram, 3500, homeFeed, index = 9, isReel = false)
+        // Home tapped: back at the top with new posts.
+        d.onFeedScroll(instagram, 10_000, homeFeed, index = 0, isReel = true)
+        assertTrue(d.onTick(instagram, 12_000))
+    }
+
+    @Test
+    fun openingTheFeedReelJustCountedDoesNotCountAgain() {
+        val d = ReelDetector()
+        d.onFeedScroll(instagram, 0, homeFeed, index = 4, isReel = true)
+        assertTrue(d.onTick(instagram, 2000))
+        // Tapped it: it opens full screen.
+        assertFalse(d.onScreen(instagram, 4000, feedShowing = true, feedKeys = setOf(55)))
+        assertEquals("opened the feed reel just counted", d.lastReason)
+        // Swiping on from there counts as usual.
+        d.onScroll(sample(time = 4200, from = 0, key = 55))
+        assertTrue(d.onScroll(sample(time = 8000, from = 1, key = 55)))
+    }
+
+    @Test
+    fun openingAnotherReelAfterScrollingOnCounts() {
+        val d = ReelDetector()
+        d.onFeedScroll(instagram, 0, homeFeed, index = 4, isReel = true)
+        assertTrue(d.onTick(instagram, 2000))
+        d.onFeedScroll(instagram, 3000, homeFeed, index = 7, isReel = false)
+        assertTrue(d.onScreen(instagram, 5000, feedShowing = true, feedKeys = setOf(55)))
     }
 
     // --- What counts as a reel feed ---
